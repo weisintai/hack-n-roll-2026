@@ -26,6 +26,7 @@ async fn main() -> Result<()> {
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+    terminal.clear()?;
 
     // Create app
     let mut app = App::new();
@@ -87,4 +88,3 @@ fn run_app<B: ratatui::backend::Backend>(
         app.tick();
     }
 }
-

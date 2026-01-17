@@ -1,7 +1,7 @@
 use crate::languages::Language;
-use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
+use std::time::Duration;
 use std::io::Write;
 
 fn debug_log(msg: &str) {
@@ -35,6 +35,20 @@ impl std::error::Error for ConversionError {}
 #[derive(Serialize)]
 struct GeminiRequest {
     contents: Vec<Content>,
+    #[serde(rename = "generationConfig", skip_serializing_if = "Option::is_none")]
+    generation_config: Option<GenerationConfig>,
+}
+
+#[derive(Serialize)]
+struct GenerationConfig {
+    #[serde(rename = "thinkingConfig")]
+    thinking_config: ThinkingConfig,
+}
+
+#[derive(Serialize)]
+struct ThinkingConfig {
+    #[serde(rename = "thinkingLevel")]
+    thinking_level: &'static str,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -63,11 +77,7 @@ struct GeminiError {
     message: String,
 }
 
-// Streaming response types
-#[derive(Deserialize)]
-struct StreamChunkResponse {
-    candidates: Option<Vec<Candidate>>,
-}
+const GEMINI_MODEL: &str = "gemini-3-flash-preview";
 
 pub struct LlmConverter {
     api_key: String,
@@ -79,13 +89,25 @@ impl LlmConverter {
         let api_key = std::env::var("GEMINI_API_KEY")
             .map_err(|_| ConversionError::EnvError("GEMINI_API_KEY not set".to_string()))?;
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(25))
+            .connect_timeout(Duration::from_secs(10))
+            .build()
+            .map_err(|e| ConversionError::ApiError(e.to_string()))?;
 
         Ok(Self { api_key, client })
     }
 
     fn build_prompt(code: &str, from: Language, to: Language) -> String {
         let mut extra_rules = String::new();
+        let forbidden = forbidden_tokens(to);
+        if !forbidden.is_empty() {
+            extra_rules.push_str("\nLANGUAGE LOCK:\n- Output must be valid ");
+            extra_rules.push_str(to.display_name());
+            extra_rules.push_str(" syntax only.\n- Do NOT use syntax tokens from other languages (outside of string literals/comments). Forbidden tokens: ");
+            extra_rules.push_str(&forbidden.join(", "));
+            extra_rules.push_str("\n- If you would output mixed-language code, output an empty string instead.\n");
+        }
         if from == Language::Python && to != Language::Python {
             extra_rules.push_str(
                 r#"
@@ -121,8 +143,8 @@ Output ONLY the translated code, no markdown formatting, no explanations, no cod
         )
     }
 
-    /// Starts an async conversion task that sends chunks through a channel.
-    /// Returns a receiver that the caller can poll for chunks.
+    /// Starts an async conversion task and sends the final result through a channel.
+    /// Returns a receiver that the caller can poll for the final result.
     pub fn start_streaming_conversion(
         &self,
         code: String,
@@ -136,8 +158,11 @@ Output ONLY the translated code, no markdown formatting, no explanations, no cod
 
         // Spawn the async task on the tokio runtime
         tokio::spawn(async move {
-            match stream_conversion(client, api_key, prompt, tx.clone()).await {
-                Ok(_) => {
+            match request_conversion(client, api_key, prompt).await {
+                Ok(text) => {
+                    if !text.is_empty() {
+                        let _ = tx.send(StreamChunk::Text(text));
+                    }
                     let _ = tx.send(StreamChunk::Done);
                 }
                 Err(e) => {
@@ -168,18 +193,24 @@ Output ONLY the translated code, no markdown formatting, no explanations, no cod
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let url = format!(
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
-                    api_key
+                    "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+                    GEMINI_MODEL
                 );
 
-                let request = GeminiRequest {
-                    contents: vec![Content {
-                        parts: vec![Part { text: prompt }],
-                    }],
-                };
+        let request = GeminiRequest {
+            contents: vec![Content {
+                parts: vec![Part { text: prompt }],
+            }],
+            generation_config: Some(GenerationConfig {
+                thinking_config: ThinkingConfig {
+                    thinking_level: "minimal",
+                },
+            }),
+        };
 
                 let response = client
                     .post(&url)
+                    .header("x-goog-api-key", api_key)
                     .json(&request)
                     .send()
                     .await
@@ -210,26 +241,52 @@ Output ONLY the translated code, no markdown formatting, no explanations, no cod
     }
 }
 
-async fn stream_conversion(
+fn forbidden_tokens(to: Language) -> Vec<&'static str> {
+    let mut tokens = Vec::new();
+    if to != Language::Python {
+        tokens.extend(["def ", "elif ", "self", "None", "pass"]);
+    }
+    if to != Language::Rust {
+        tokens.extend(["fn ", "println!", "let mut", "Vec<", "::"]);
+    }
+    if to != Language::Go {
+        tokens.extend(["func ", ":=", "package ", "fmt."]);
+    }
+    if to != Language::Java {
+        tokens.extend(["public class", "System.out", "String", "new "]);
+    }
+    if to != Language::TypeScript {
+        tokens.extend(["interface ", "type ", "enum ", ": number", ": string"]);
+    }
+    tokens
+}
+
+async fn request_conversion(
     client: reqwest::Client,
     api_key: String,
     prompt: String,
-    tx: mpsc::Sender<StreamChunk>,
-) -> Result<(), ConversionError> {
-    debug_log("stream_conversion started");
+) -> Result<String, ConversionError> {
+    debug_log("request_conversion started");
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key={}&alt=sse",
-        api_key
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+        GEMINI_MODEL
     );
 
-    let request = GeminiRequest {
-        contents: vec![Content {
-            parts: vec![Part { text: prompt }],
-        }],
-    };
+                let request = GeminiRequest {
+                    contents: vec![Content {
+                        parts: vec![Part { text: prompt }],
+                    }],
+                    generation_config: Some(GenerationConfig {
+                        thinking_config: ThinkingConfig {
+                            thinking_level: "minimal",
+                        },
+                    }),
+                };
 
+    debug_log("Sending Gemini request...");
     let response = client
         .post(&url)
+        .header("x-goog-api-key", api_key)
         .json(&request)
         .send()
         .await
@@ -246,65 +303,25 @@ async fn stream_conversion(
         )));
     }
 
-    let mut stream = response.bytes_stream();
-    let mut buffer = String::new();
-    debug_log("Starting to read stream...");
+    let gemini_response: GeminiResponse = response
+        .json()
+        .await
+        .map_err(|e| ConversionError::ApiError(e.to_string()))?;
 
-    while let Some(chunk_result) = stream.next().await {
-        match chunk_result {
-            Ok(chunk) => {
-                let chunk_str = String::from_utf8_lossy(&chunk);
-                buffer.push_str(&chunk_str);
-
-                // Process each complete "data: " line in the buffer
-                // SSE format: "data: {json}\n" or "data: {json}\r\n"
-                while let Some(data_start) = buffer.find("data: ") {
-                    // Find the end of this data line
-                    let rest = &buffer[data_start + 6..];
-                    if let Some(line_end) = rest.find('\n') {
-                        let json_str = &rest[..line_end].trim();
-                        debug_log(&format!("Processing JSON: {}...", &json_str[..json_str.len().min(80)]));
-
-                        match serde_json::from_str::<StreamChunkResponse>(json_str) {
-                            Ok(response) => {
-                                if let Some(text) = response
-                                    .candidates
-                                    .and_then(|c| c.into_iter().next())
-                                    .and_then(|c| c.content)
-                                    .and_then(|c| c.parts.into_iter().next())
-                                    .map(|p| p.text)
-                                {
-                                    debug_log(&format!("Extracted text: {:?}", &text[..text.len().min(50)]));
-                                    if !text.is_empty() {
-                                        if tx.send(StreamChunk::Text(text)).is_err() {
-                                            debug_log("Receiver dropped!");
-                                            return Ok(());
-                                        }
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                debug_log(&format!("JSON parse error: {}", e));
-                            }
-                        }
-
-                        // Remove processed part from buffer
-                        buffer = buffer[data_start + 6 + line_end + 1..].to_string();
-                    } else {
-                        // Incomplete line, wait for more data
-                        break;
-                    }
-                }
-            }
-            Err(e) => {
-                debug_log(&format!("Stream error: {}", e));
-                return Err(ConversionError::ApiError(e.to_string()));
-            }
-        }
+    if let Some(error) = gemini_response.error {
+        return Err(ConversionError::ApiError(error.message));
     }
-    debug_log("Stream ended");
 
-    Ok(())
+    let text = gemini_response
+        .candidates
+        .and_then(|c| c.into_iter().next())
+        .and_then(|c| c.content)
+        .and_then(|c| c.parts.into_iter().next())
+        .map(|p| p.text)
+        .unwrap_or_default();
+
+    debug_log(&format!("Extracted text: {:?}", &text[..text.len().min(50)]));
+    Ok(text)
 }
 
 #[derive(Debug, Clone)]
