@@ -522,6 +522,14 @@ import sys
 # Test runner
 test_cases = {}
 
+def parse_value(value):
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except Exception:
+        return value
+
 results = []
 for i, tc in enumerate(test_cases):
     try:
@@ -531,9 +539,9 @@ for i, tc in enumerate(test_cases):
         # Dynamically handle different problem types
         if "nums" in tc and "target" in tc:
             # Two Sum (problem 1)
-            nums = eval(tc["nums"]) if isinstance(tc["nums"], str) else tc["nums"]
-            target = int(tc["target"])
-            expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
+            nums = parse_value(tc["nums"])
+            target = int(parse_value(tc["target"]))
+            expected = parse_value(tc["expected"])
             
             # Try finding solution function
             if 'two_sum' in dir():
@@ -543,8 +551,8 @@ for i, tc in enumerate(test_cases):
         
         elif "s" in tc:
             # String problems (problem 2 or 4)
-            s_input = eval(tc["s"]) if isinstance(tc["s"], str) else tc["s"]
-            expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
+            s_input = parse_value(tc["s"])
+            expected = parse_value(tc["expected"])
             
             if isinstance(s_input, list):
                 # Reverse String (problem 2) - modifies in place OR returns result
@@ -568,8 +576,8 @@ for i, tc in enumerate(test_cases):
         
         elif "n" in tc:
             # Number problems (problem 3 or 5)
-            n = int(tc["n"])
-            expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
+            n = int(parse_value(tc["n"]))
+            expected = parse_value(tc["expected"])
             
             if isinstance(expected, list):
                 # Fizz Buzz (problem 3)
