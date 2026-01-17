@@ -361,7 +361,28 @@ pub async fn run_tests_on_piston(
         });
     };
 
-    send_log(format!("Preparing {} environment...", language.display_name()), false);
+    // Convert to Python if not already Python
+    let python_code = if language != Language::Python {
+        send_log(format!("Converting {} to Python...", language.display_name()), false);
+        
+        let prompt = crate::languages::build_translation_prompt(&code, language, Language::Python);
+        match crate::llm::translate_code(&prompt).await {
+            Ok(translated) => {
+                send_log("Conversion successful!".to_string(), false);
+                translated
+            }
+            Err(e) => {
+                let error_msg = format!("Translation failed: {}", e);
+                send_log(error_msg.clone(), true);
+                return create_error_results(&problem, &error_msg);
+            }
+        }
+    } else {
+        send_log("Using Python code directly...".to_string(), false);
+        code
+    };
+
+    send_log("Preparing Python environment...".to_string(), false);
 
     // Build test cases JSON
     let test_cases_json: Vec<serde_json::Value> = problem
@@ -398,29 +419,11 @@ pub async fn run_tests_on_piston(
         })
         .collect();
 
-    // Generate harness based on language
-    let full_code = match language {
-        Language::Python => generate_python_harness(&code, &test_cases_json),
-        Language::JavaScript => generate_javascript_harness(&code, &test_cases_json),
-        Language::TypeScript => generate_typescript_harness(&code, &test_cases_json),
-        Language::Go => generate_go_harness(&code, &test_cases_json),
-        Language::Java => generate_java_harness(&code, &test_cases_json),
-        Language::Rust => {
-            // Rust on Piston is limited (no full Cargo support)
-            // We'll provide a basic wrapper but note limitations
-            send_log("Note: Rust on Piston has limited support (no Cargo dependencies)".to_string(), false);
-            generate_rust_harness(&code, &test_cases_json)
-        }
-    };
+    // Always generate Python harness since we converted to Python
+    let full_code = generate_python_harness(&python_code, &test_cases_json);
 
-    let (piston_lang, piston_ver, filename) = match language {
-        Language::Python => ("python", "3.10.0", "solution.py"),
-        Language::JavaScript => ("javascript", "18.15.0", "solution.js"),
-        Language::TypeScript => ("typescript", "1.32.3", "solution.ts"),
-        Language::Rust => ("rust", "1.68.2", "solution.rs"),
-        Language::Go => ("go", "1.16.2", "solution.go"),
-        Language::Java => ("java", "15.0.2", "Main.java"),
-    };
+    // Always use Python for Piston execution
+    let (piston_lang, piston_ver, filename) = ("python", "3.10.0", "solution.py");
 
     let request = PistonRequest {
         language: piston_lang.to_string(),
@@ -435,7 +438,7 @@ pub async fn run_tests_on_piston(
 
     // Log the full generated code for debugging
     log_piston_full_exchange(
-        language.display_name(),
+        "Python (converted)",
         &full_code,
         "[Request sent, awaiting response...]"
     );
@@ -509,364 +512,6 @@ pub async fn run_tests_on_piston(
     }
 }
 
-fn generate_javascript_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
-    format!(
-        r#"
-// User's code
-{}
-
-// Test runner
-const testCases = {};
-
-const results = [];
-for (let i = 0; i < testCases.length; i++) {{
-    try {{
-        const tc = testCases[i];
-        const nums = JSON.parse(tc.nums);
-        const target = parseInt(tc.target);
-        const expected = JSON.parse(tc.expected);
-        
-        let actual = null;
-        // Try to find the solution function dynamically
-        if (typeof twoSum !== 'undefined') {{
-            actual = twoSum(nums, target);
-        }} else {{
-            // Try to find any function that looks like it could be the solution
-            const globalFuncs = Object.keys(this || {{}}).filter(k => typeof (this || {{}})[k] === 'function');
-            if (globalFuncs.length > 0) {{
-                actual = (this || {{}})[globalFuncs[0]](nums, target);
-            }}
-        }}
-        
-        if (actual === null) {{
-            results.push({{ passed: false, actual: "Error: No function found" }});
-            continue;
-        }}
-            
-        const passed = JSON.stringify(actual.sort()) === JSON.stringify(expected.sort());
-        results.push({{ passed, actual: JSON.stringify(actual) }});
-    }} catch (e) {{
-        results.push({{ passed: false, actual: `Error: ${{e.message}}` }});
-    }}
-}}
-
-console.log(JSON.stringify(results));
-"#,
-        user_code,
-        serde_json::to_string(test_cases).unwrap_or_default()
-    )
-}
-
-fn generate_typescript_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
-    format!(
-        r#"
-// User's code
-{}
-
-// Test runner
-const testCases: any[] = {};
-
-const results: any[] = [];
-for (let i = 0; i < testCases.length; i++) {{
-    try {{
-        const tc = testCases[i];
-        const nums: number[] = JSON.parse(tc.nums);
-        const target: number = parseInt(tc.target);
-        const expected: number[] = JSON.parse(tc.expected);
-        
-        let actual: number[] | null = null;
-        // Try to find the solution function (TypeScript uses camelCase conventionally)
-        if (typeof twoSum !== 'undefined') {{
-            actual = twoSum(nums, target);
-        }}
-        
-        if (actual === null) {{
-            results.push({{ passed: false, actual: "Error: No twoSum function found" }});
-            continue;
-        }}
-            
-        const passed = JSON.stringify(actual.sort()) === JSON.stringify(expected.sort());
-        results.push({{ passed, actual: JSON.stringify(actual) }});
-    }} catch (e: any) {{
-        results.push({{ passed: false, actual: `Error: ${{e.message}}` }});
-    }}
-}}
-
-console.log(JSON.stringify(results));
-"#,
-        user_code,
-        serde_json::to_string(test_cases).unwrap_or_default()
-    )
-}
-
-fn generate_go_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
-    // Extract test case data
-    let test_data: Vec<(String, String, String)> = test_cases.iter().map(|tc| {
-        let nums = tc["nums"].as_str().unwrap_or("[]");
-        let target = tc["target"].as_str().unwrap_or("0");
-        let expected = tc["expected"].as_str().unwrap_or("[]");
-        (nums.to_string(), target.to_string(), expected.to_string())
-    }).collect();
-    
-    let mut test_cases_code = String::new();
-    for (i, (nums, target, expected)) in test_data.iter().enumerate() {
-        test_cases_code.push_str(&format!(
-            "\tTestCase{{Nums: \"{}\", Target: \"{}\", Expected: \"{}\"}},\n",
-            nums.replace('"', "\\\""), target.replace('"', "\\\""), expected.replace('"', "\\\"")
-        ));
-    }
-    
-    format!(
-        r#"
-package main
-
-import (
-	"encoding/json"
-	"fmt"
-	"sort"
-	"strconv"
-	"strings"
-)
-
-{}
-
-type TestCase struct {{
-	Nums     string
-	Target   string
-	Expected string
-}}
-
-type TestResult struct {{
-	Passed bool   `json:"passed"`
-	Actual string `json:"actual"`
-}}
-
-func parseIntArray(s string) []int {{
-	s = strings.TrimSpace(s)
-	s = strings.Trim(s, "[]")
-	if s == "" {{
-		return []int{{}}
-	}}
-	parts := strings.Split(s, ",")
-	result := make([]int, len(parts))
-	for i, p := range parts {{
-		val, _ := strconv.Atoi(strings.TrimSpace(p))
-		result[i] = val
-	}}
-	return result
-}}
-
-func main() {{
-	testCases := []TestCase{{
-{}	}}
-	
-	results := []TestResult{{}}
-	
-	for _, tc := range testCases {{
-		nums := parseIntArray(tc.Nums)
-		expected := parseIntArray(tc.Expected)
-		target, _ := strconv.Atoi(tc.Target)
-		
-		actual := twoSum(nums, target)
-		
-		// Sort for comparison
-		sortedActual := make([]int, len(actual))
-		copy(sortedActual, actual)
-		sort.Ints(sortedActual)
-		
-		sortedExpected := make([]int, len(expected))
-		copy(sortedExpected, expected)
-		sort.Ints(sortedExpected)
-		
-		passed := len(sortedActual) == len(sortedExpected)
-		if passed {{
-			for i := range sortedActual {{
-				if sortedActual[i] != sortedExpected[i] {{
-					passed = false
-					break
-				}}
-			}}
-		}}
-		
-		actualJSON, _ := json.Marshal(actual)
-		results = append(results, TestResult{{Passed: passed, Actual: string(actualJSON)}})
-	}}
-	
-	output, _ := json.Marshal(results)
-	fmt.Println(string(output))
-}}
-"#,
-        user_code,
-        test_cases_code
-    )
-}
-
-fn generate_java_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
-    // Extract test case data
-    let test_data: Vec<(String, String, String)> = test_cases.iter().map(|tc| {
-        let nums = tc["nums"].as_str().unwrap_or("[]");
-        let target = tc["target"].as_str().unwrap_or("0");
-        let expected = tc["expected"].as_str().unwrap_or("[]");
-        (nums.to_string(), target.to_string(), expected.to_string())
-    }).collect();
-    
-    let mut test_cases_code = String::new();
-    for (i, (nums, target, expected)) in test_data.iter().enumerate() {
-        test_cases_code.push_str(&format!(
-            "        testCases[{}] = new TestCase(\"{}\", \"{}\", \"{}\");\n",
-            i, nums.replace('"', "\\\""), target.replace('"', "\\\""), expected.replace('"', "\\\"")
-        ));
-    }
-    
-    // Process user code: strip imports and ensure proper structure
-    let user_code_clean = user_code.lines()
-        .filter(|line| !line.trim().starts_with("import ") && !line.trim().starts_with("package "))
-        .collect::<Vec<_>>()
-        .join("\n");
-    
-    // Ensure user code has proper structure or provide placeholder, and indent for class nesting
-    let user_code_safe = if user_code_clean.trim().is_empty() {
-        "        public int[] twoSum(int[] nums, int target) {\n            return new int[0];\n        }".to_string()
-    } else {
-        // Indent each line for proper class nesting (8 spaces as it's inside static class Solution which is inside Main)
-        user_code_clean.lines()
-            .map(|line| if line.trim().is_empty() { String::new() } else { format!("        {}", line) })
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    
-    format!(
-        r#"
-import java.util.*;
-
-public class Main {{
-    static class Solution {{
-{}
-    }}
-
-    static class TestCase {{
-        String nums;
-        String target;
-        String expected;
-        
-        TestCase(String n, String t, String e) {{
-            this.nums = n;
-            this.target = t;
-            this.expected = e;
-        }}
-    }}
-
-    public static void main(String[] args) {{
-        TestCase[] testCases = new TestCase[{}];
-{}
-        
-        StringBuilder results = new StringBuilder("[");
-        Solution solution = new Solution();
-        
-        for (int idx = 0; idx < testCases.length; idx++) {{
-            try {{
-                TestCase tc = testCases[idx];
-                
-                // Parse arrays manually
-                int[] nums = parseIntArray(tc.nums);
-                int target = Integer.parseInt(tc.target);
-                int[] expected = parseIntArray(tc.expected);
-                
-                int[] actual = solution.twoSum(nums, target);
-                
-                Arrays.sort(actual);
-                Arrays.sort(expected);
-                boolean passed = Arrays.equals(actual, expected);
-                
-                if (idx > 0) results.append(",");
-                results.append("{{\"passed\":");
-                results.append(passed);
-                results.append(",\"actual\":\"");
-                results.append(Arrays.toString(actual));
-                results.append("\"}}");
-            }} catch (Exception e) {{
-                if (idx > 0) results.append(",");
-                results.append("{{\"passed\":false,\"actual\":\"Error: ");
-                results.append(e.getMessage());
-                results.append("\"}}");
-            }}
-        }}
-        results.append("]");
-        
-        System.out.println(results.toString());
-    }}
-    
-    static int[] parseIntArray(String s) {{
-        s = s.trim().replace("[", "").replace("]", "");
-        if (s.isEmpty()) return new int[0];
-        String[] parts = s.split(",");
-        int[] result = new int[parts.length];
-        for (int i = 0; i < parts.length; i++) {{
-            result[i] = Integer.parseInt(parts[i].trim());
-        }}
-        return result;
-    }}
-}}
-"#,
-        user_code_safe,
-        test_data.len(),
-        test_cases_code
-    )
-}
-
-fn generate_rust_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
-    // Piston's Rust doesn't support Cargo dependencies, so manually build test cases
-    let test_data: Vec<(String, String, String)> = test_cases.iter().map(|tc| {
-        let nums = tc["nums"].as_str().unwrap_or("[]");
-        let target = tc["target"].as_str().unwrap_or("0");
-        let expected = tc["expected"].as_str().unwrap_or("[]");
-        (nums.to_string(), target.to_string(), expected.to_string())
-    }).collect();
-    
-    // Generate test case execution code
-    let mut test_execution = String::new();
-    for (i, (nums, target, expected)) in test_data.iter().enumerate() {
-        test_execution.push_str(&format!(
-            r#"
-    // Test case {}
-    {{
-        let nums = vec!{};
-        let target = {};
-        let expected = vec!{};
-        let actual = two_sum(nums, target);
-        
-        let mut sorted_actual = actual.clone();
-        sorted_actual.sort();
-        let mut sorted_expected = expected.clone();
-        sorted_expected.sort();
-        
-        let passed = sorted_actual == sorted_expected;
-        if idx > 0 {{ print!(","); }}
-        print!("{{{{\"passed\":{{}},", passed);
-        print!("\"actual\":\"{{:?}}\"}}}}", actual);
-        idx += 1;
-    }}
-"#,
-            i + 1, nums, target, expected
-        ));
-    }
-    
-    format!(
-        r#"
-// User's code
-{}
-
-fn main() {{
-    let mut idx = 0;
-    print!("[");
-{}
-    println!("]")
-}}
-"#,
-        user_code,
-        test_execution
-    )
-}
 
 fn generate_python_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
     format!(
