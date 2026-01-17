@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Gauge, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Gauge, Paragraph, Wrap},
     Frame,
 };
 use std::time::{Duration, Instant};
@@ -1673,7 +1673,20 @@ impl App {
         let size = frame.size();
         
         let score_percent = (results.passed as f32 / results.total as f32 * 100.0) as u8;
-        let score_color = if score_percent >= 80 {
+        let (score_color, score_msg) = if score_percent == 100 {
+            (Color::Rgb(255, 215, 0), "PERFECT!") // Gold
+        } else if score_percent >= 80 {
+            (Color::Green, "GREAT!")
+        } else if score_percent >= 50 {
+            (Color::Yellow, "NICE TRY!")
+        } else {
+            (Color::Red, "GAME OVER")
+        };
+
+        // Create centered layout with border colors
+        let border_color = if score_percent == 100 {
+            Color::Rgb(255, 215, 0) // Gold
+        } else if score_percent >= 80 {
             Color::Green
         } else if score_percent >= 50 {
             Color::Yellow
@@ -1681,60 +1694,266 @@ impl App {
             Color::Red
         };
 
-            let mut text = vec![
-                Line::from(""),
-                Line::from(Span::styled("╔═══════════════════════════════════════╗", Style::default().fg(Color::Cyan))),
-                Line::from(Span::styled("║          RESULTS SCREEN              ║", Style::default().fg(Color::Cyan))),
-                Line::from(Span::styled("╚═══════════════════════════════════════╝", Style::default().fg(Color::Cyan))),
-                Line::from(""),
-                Line::from(vec![
-                    Span::styled("SCORE: ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!("{}/{} ", results.passed, results.total), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!("({}%)", score_percent), Style::default().fg(score_color)),
-                ]),
-                Line::from(""),
-                Line::from(Span::styled("═══════════════════════════════════════", Style::default().fg(Color::DarkGray))),
-                Line::from(""),
-            ];
+        // Main layout: horizontal split for main area and scoreboard
+        let main_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(65),  // Main score area
+                Constraint::Percentage(35),  // Scoreboard
+            ])
+            .split(centered_rect(95, 90, size));
 
-            for result in &results.details {
-                let status = if result.passed {
-                    Span::styled("✓ PASS", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
-                } else {
-                    Span::styled("✗ FAIL", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
-                };
+        // Main score area
+        let mut main_text = vec![
+            Line::from(""),
+            Line::from(""),
+            Line::from(""),
+        ];
 
-                text.push(Line::from(vec![
-                    status,
-                    Span::styled(format!(" Test #{}", result.case_number), Style::default().fg(Color::White)),
+        // Status message
+        main_text.push(Line::from(Span::styled(score_msg, Style::default().fg(score_color).add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED))));
+        main_text.push(Line::from(""));
+        main_text.push(Line::from(""));
+        
+        // Percentage in mega size - only show necessary digits
+        let percent_symbol = self.get_ascii_percent();
+        
+        if score_percent == 100 {
+            // Show all three digits for 100%
+            let digit_100 = self.get_ascii_number(1);
+            let digit_10 = self.get_ascii_number(0);
+            let digit_1 = self.get_ascii_number(0);
+            
+            for i in 0..7 {
+                main_text.push(Line::from(vec![
+                    Span::styled(digit_100[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(digit_10[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(digit_1[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(percent_symbol[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
                 ]));
-                text.push(Line::from(vec![
-                    Span::styled("  Input: ", Style::default().fg(Color::Cyan)),
-                    Span::styled(&result.input, Style::default().fg(Color::Gray)),
-                ]));
-                text.push(Line::from(vec![
-                    Span::styled("  Expected: ", Style::default().fg(Color::Cyan)),
-                    Span::styled(&result.expected, Style::default().fg(Color::Gray)),
-                ]));
-                if !result.passed {
-                    text.push(Line::from(vec![
-                        Span::styled("  Got: ", Style::default().fg(Color::Red)),
-                        Span::styled(&result.actual, Style::default().fg(Color::Gray)),
-                    ]));
-                }
-                text.push(Line::from(""));
             }
+        } else if score_percent >= 10 {
+            // Show two digits for 10-99%
+            let digit_10 = self.get_ascii_number((score_percent / 10) % 10);
+            let digit_1 = self.get_ascii_number(score_percent % 10);
+            
+            for i in 0..7 {
+                main_text.push(Line::from(vec![
+                    Span::styled(digit_10[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(digit_1[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(percent_symbol[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                ]));
+            }
+        } else {
+            // Show one digit for 0-9%
+            let digit_1 = self.get_ascii_number(score_percent % 10);
+            
+            for i in 0..7 {
+                main_text.push(Line::from(vec![
+                    Span::styled(digit_1[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(percent_symbol[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                ]));
+            }
+        }
 
-            text.push(Line::from(""));
-            text.push(Line::from(Span::styled("═══════════════════════════════════════", Style::default().fg(Color::DarkGray))));
-            text.push(Line::from(""));
-            text.push(Line::from(Span::styled("Press 'R' to restart or 'Q' to quit", Style::default().fg(Color::Yellow))));
+        main_text.push(Line::from(""));
+        main_text.push(Line::from(""));
+        
+        // Summary message
+        let summary = format!("You passed {} out of {} test cases!", results.passed, results.total);
+        main_text.push(Line::from(Span::styled(summary, Style::default().fg(Color::White))));
+        
+        main_text.push(Line::from(""));
+        main_text.push(Line::from(""));
+        main_text.push(Line::from(""));
+        main_text.push(Line::from(Span::styled("Press 'R' to restart  •  Press 'Q' to quit", Style::default().fg(Color::Rgb(255, 165, 0)))));
 
-            let paragraph = Paragraph::new(text)
-                .alignment(Alignment::Center)
-                .wrap(Wrap { trim: false });
+        let main_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Double)
+            .border_style(Style::default().fg(border_color).add_modifier(Modifier::BOLD))
+            .title(" FINAL SCORE ")
+            .title_style(Style::default().fg(border_color).add_modifier(Modifier::BOLD));
 
-            frame.render_widget(paragraph, size);
+        let main_paragraph = Paragraph::new(main_text)
+            .block(main_block)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: false });
+
+        // Scoreboard area
+        let mut scoreboard_text = vec![
+            Line::from(""),
+        ];
+
+        for result in &results.details {
+            let status_symbol = if result.passed { "✓" } else { "✗" };
+            let status_color = if result.passed { Color::Green } else { Color::Red };
+            
+            scoreboard_text.push(Line::from(vec![
+                Span::styled("  ", Style::default()),
+                Span::styled(status_symbol, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(" Test #{}", result.case_number), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            ]));
+            
+            // Compact display - use owned String
+            let input_display = if result.input.len() > 30 {
+                format!("{}...", &result.input[..27])
+            } else {
+                result.input.clone()
+            };
+            
+            scoreboard_text.push(Line::from(vec![
+                Span::styled("  In: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(input_display, Style::default().fg(Color::Gray)),
+            ]));
+            
+            if result.passed {
+                scoreboard_text.push(Line::from(vec![
+                    Span::styled("  ✓  ", Style::default().fg(Color::Green)),
+                    Span::styled(result.expected.clone(), Style::default().fg(Color::Green)),
+                ]));
+            } else {
+                scoreboard_text.push(Line::from(vec![
+                    Span::styled("  Expected: ", Style::default().fg(Color::Cyan)),
+                    Span::styled(result.expected.clone(), Style::default().fg(Color::White)),
+                ]));
+                scoreboard_text.push(Line::from(vec![
+                    Span::styled("  Got: ", Style::default().fg(Color::Red)),
+                    Span::styled(result.actual.clone(), Style::default().fg(Color::White)),
+                ]));
+            }
+            scoreboard_text.push(Line::from(""));
+        }
+
+        let scoreboard_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Double)
+            .border_style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD));
+
+        let scoreboard_paragraph = Paragraph::new(scoreboard_text)
+            .block(scoreboard_block)
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: false })
+            .scroll((0, 0));
+
+        frame.render_widget(main_paragraph, main_layout[0]);
+        frame.render_widget(scoreboard_paragraph, main_layout[1]);
+    }
+
+    fn get_ascii_number(&self, digit: u8) -> [String; 7] {
+        match digit {
+            0 => [
+                " ██████╗  ".to_string(),
+                "██╔═══██╗ ".to_string(),
+                "██║   ██║ ".to_string(),
+                "██║   ██║ ".to_string(),
+                "██║   ██║ ".to_string(),
+                "╚██████╔╝ ".to_string(),
+                " ╚═════╝  ".to_string(),
+            ],
+            1 => [
+                " ██╗ ".to_string(),
+                "███║ ".to_string(),
+                "╚██║ ".to_string(),
+                " ██║ ".to_string(),
+                " ██║ ".to_string(),
+                " ██║ ".to_string(),
+                " ╚═╝ ".to_string(),
+            ],
+            2 => [
+                "██████╗  ".to_string(),
+                "╚════██╗ ".to_string(),
+                "  ███╔═╝ ".to_string(),
+                " ███╔═╝  ".to_string(),
+                "███╔═╝   ".to_string(),
+                "███████╗ ".to_string(),
+                "╚══════╝ ".to_string(),
+            ],
+            3 => [
+                "██████╗  ".to_string(),
+                "╚════██╗ ".to_string(),
+                "  ███╔═╝ ".to_string(),
+                " ████╗   ".to_string(),
+                " ╚═══██╗ ".to_string(),
+                "██████╔╝ ".to_string(),
+                "╚═════╝  ".to_string(),
+            ],
+            4 => [
+                "██╗  ██╗ ".to_string(),
+                "██║  ██║ ".to_string(),
+                "██║  ██║ ".to_string(),
+                "███████║ ".to_string(),
+                "╚════██║ ".to_string(),
+                "     ██║ ".to_string(),
+                "     ╚═╝ ".to_string(),
+            ],
+            5 => [
+                "███████╗ ".to_string(),
+                "██╔════╝ ".to_string(),
+                "███████╗ ".to_string(),
+                "╚════██║ ".to_string(),
+                "     ██║ ".to_string(),
+                "███████║ ".to_string(),
+                "╚══════╝ ".to_string(),
+            ],
+            6 => [
+                " ██████╗  ".to_string(),
+                "██╔════╝  ".to_string(),
+                "███████╗  ".to_string(),
+                "██╔═══██╗ ".to_string(),
+                "██║   ██║ ".to_string(),
+                "╚██████╔╝ ".to_string(),
+                " ╚═════╝  ".to_string(),
+            ],
+            7 => [
+                "███████╗ ".to_string(),
+                "╚════██║ ".to_string(),
+                "    ██╔╝ ".to_string(),
+                "   ██╔╝  ".to_string(),
+                "  ██╔╝   ".to_string(),
+                "  ██║    ".to_string(),
+                "  ╚═╝    ".to_string(),
+            ],
+            8 => [
+                " ██████╗  ".to_string(),
+                "██╔═══██╗ ".to_string(),
+                "██║   ██║ ".to_string(),
+                "╚██████╔╝ ".to_string(),
+                "██╔═══██╗ ".to_string(),
+                "╚██████╔╝ ".to_string(),
+                " ╚═════╝  ".to_string(),
+            ],
+            9 => [
+                " ██████╗  ".to_string(),
+                "██╔═══██╗ ".to_string(),
+                "██║   ██║ ".to_string(),
+                "╚██████╔╝ ".to_string(),
+                " ╚════██║ ".to_string(),
+                "  █████╔╝ ".to_string(),
+                "  ╚════╝  ".to_string(),
+            ],
+            _ => [
+                "    ".to_string(),
+                "    ".to_string(),
+                "    ".to_string(),
+                "    ".to_string(),
+                "    ".to_string(),
+                "    ".to_string(),
+                "    ".to_string(),
+            ],
+        }
+    }
+
+    fn get_ascii_percent(&self) -> [String; 7] {
+        [
+            "  ██╗   ██╗ ".to_string(),
+            "  ██║  ██╔╝ ".to_string(),
+            "  ╚═╝ ██╔╝  ".to_string(),
+            "     ██╔╝   ".to_string(),
+            "    ██╔╝ ██╗".to_string(),
+            "   ██╔╝  ██║".to_string(),
+            "   ╚═╝   ╚═╝".to_string(),
+        ]
     }
 }
 
