@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Gauge, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Clear, Gauge, Paragraph, Wrap},
     Frame,
 };
 use std::time::{Duration, Instant};
@@ -15,7 +15,7 @@ use crate::problem::{run_tests_on_piston, Problem, TestResults};
 use crate::syntax::SyntaxHighlighter;
 
 // Configuration constants
-const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 45;
+const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 10;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppState {
@@ -1647,16 +1647,17 @@ impl App {
         
         let popup_area = centered_rect(50, 28, size);
         
-        // Glass UI effect: dark semi-transparent background
-        let glass_bg = Color::Rgb(20, 20, 30); // Dark blue-ish tint
+        // Clear the area for solid background
+        frame.render_widget(Clear, popup_area);
         
         let popup = Paragraph::new(countdown_text)
             .alignment(Alignment::Center)
+            .style(Style::default().bg(Color::Black))
             .block(Block::default()
                 .borders(Borders::ALL)
                 .border_type(ratatui::widgets::BorderType::Rounded)
                 .border_style(Style::default().fg(Color::Rgb(100, 100, 120)))
-                .style(Style::default().bg(glass_bg)));
+                .style(Style::default().bg(Color::Black)));
         
         frame.render_widget(popup, popup_area);
     }
@@ -1783,8 +1784,10 @@ impl App {
         
         // Render popup with black background for readability
         let popup_area = centered_rect(75, 50, size);
+        frame.render_widget(Clear, popup_area);
         let popup = Paragraph::new(message)
             .alignment(Alignment::Center)
+            .style(Style::default().bg(Color::Black))
             .block(Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Green))
@@ -1811,17 +1814,60 @@ impl App {
         
         for i in 0..height {
             let intensity = ((i as f32 / height as f32) - progress).abs();
-            let color = if intensity < 0.1 {
-                Color::Cyan
+            let wave = (i as f32 * 0.1 + progress * 10.0).sin();
+            let phase = (self.glitch_frame as f32 * 0.1 + i as f32 * 0.05).sin();
+            
+            // Generate random rainbow colors - full spectrum
+            let hue_base = (i as f32 * 7.0 + self.glitch_frame as f32 * 3.0) % 360.0;
+            let hue_offset = wave * 60.0 + phase * 40.0;
+            let hue = (hue_base + hue_offset).rem_euclid(360.0);
+            
+            // Vary saturation and brightness based on intensity
+            let saturation = if intensity < 0.1 {
+                0.9 + rand::random::<f32>() * 0.1  // Very saturated near progress
             } else if intensity < 0.3 {
-                Color::Magenta
+                0.6 + rand::random::<f32>() * 0.3  // Medium saturation
             } else {
-                Color::Blue
+                0.3 + rand::random::<f32>() * 0.4  // Lower saturation
             };
             
+            let brightness = if intensity < 0.1 {
+                0.8 + rand::random::<f32>() * 0.2  // Bright near progress
+            } else if intensity < 0.3 {
+                0.5 + rand::random::<f32>() * 0.3  // Medium brightness
+            } else {
+                0.2 + rand::random::<f32>() * 0.3  // Dimmer background
+            };
+            
+            // Convert HSV to RGB
+            let c = brightness * saturation;
+            let x = c * (1.0 - ((hue / 60.0) % 2.0 - 1.0).abs());
+            let m = brightness - c;
+            
+            let (r, g, b) = if hue < 60.0 {
+                (c, x, 0.0)
+            } else if hue < 120.0 {
+                (x, c, 0.0)
+            } else if hue < 180.0 {
+                (0.0, c, x)
+            } else if hue < 240.0 {
+                (0.0, x, c)
+            } else if hue < 300.0 {
+                (x, 0.0, c)
+            } else {
+                (c, 0.0, x)
+            };
+            
+            let color = Color::Rgb(
+                ((r + m) * 255.0) as u8,
+                ((g + m) * 255.0) as u8,
+                ((b + m) * 255.0) as u8
+            );
+            
             let mut line_text = String::new();
-            for _ in 0..width {
-                if rand::random::<f32>() < progress {
+            for j in 0..width {
+                let density = progress + (j as f32 / width as f32 * 0.3);
+                if rand::random::<f32>() < density {
                     line_text.push_str(glitch_chars[char_idx]);
                 } else {
                     line_text.push(' ');
@@ -1874,8 +1920,10 @@ impl App {
         )));
         
         let popup_area = centered_rect(75, 50, size);
+        frame.render_widget(Clear, popup_area);
         let popup = Paragraph::new(message)
             .alignment(Alignment::Center)
+            .style(Style::default().bg(Color::Black))
             .block(Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
