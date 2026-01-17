@@ -555,6 +555,10 @@ for i, tc in enumerate(test_cases):
                 elif 'reverseString' in dir():
                     result = reverseString(s_copy)
                     actual = result if result is not None else s_copy
+                
+                # Handle case where function returns a string instead of a list
+                if isinstance(actual, str) and isinstance(expected, list):
+                    actual = list(actual)
             else:
                 # Palindrome check (problem 4)
                 if 'is_palindrome' in dir():
@@ -582,19 +586,20 @@ for i, tc in enumerate(test_cases):
         
         if actual is None:
             results.append({{"passed": False, "actual": "Error: No function found"}})
-            continue
-        
-        # Compare results
-        if isinstance(actual, list) and isinstance(expected, list):
-            # For array results, sort before comparison if they're numeric
-            if len(actual) > 0 and isinstance(actual[0], (int, float)):
-                passed = sorted(actual) == sorted(expected)
+        else:
+            # Compare results
+            passed = False
+            if isinstance(actual, list) and isinstance(expected, list):
+                # For array results, sort before comparison if they're numeric
+                if len(actual) > 0 and isinstance(actual[0], (int, float)):
+                    passed = sorted(actual) == sorted(expected)
+                else:
+                    passed = actual == expected
             else:
                 passed = actual == expected
-        else:
-            passed = actual == expected
-        
-        results.append({{"passed": passed, "actual": str(actual)}})
+            
+            results.append({{"passed": passed, "actual": str(actual)}})
+            
     except Exception as e:
         results.append({{"passed": False, "actual": f"Error: {{e}}"}})
 

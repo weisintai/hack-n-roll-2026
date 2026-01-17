@@ -473,7 +473,7 @@ impl App {
                     self.randomize_problem();
                     return;
                 }
-                // Cmd+R or Ctrl+C to run (show output)
+                // Cmd/Ctrl+C to run (show output)
                 KeyCode::Char('c') | KeyCode::Char('C') => {
                     self.show_output_panel = true;
                     self.run_code();
@@ -1265,7 +1265,7 @@ impl App {
     fn render_output_panel(&self, frame: &mut Frame, area: Rect) {
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(" Output (Cmd+R to run) ")
+            .title(" Output (^C to run) ")
             .border_style(Style::default().fg(Color::Green));
             
         let inner_area = block.inner(area);
@@ -1318,8 +1318,7 @@ impl App {
             Span::styled("Alt+←/→ ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::styled("Word", Style::default().fg(Color::White)),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Cmd+C ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled("^C ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::styled("Compile", Style::default().fg(Color::White)),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
             Span::styled("^Q ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
