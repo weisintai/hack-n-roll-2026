@@ -90,9 +90,4 @@ impl AudioPlayer {
             sink.stop();
         }
     }
-
-    /// Check if audio is currently playing
-    pub fn is_playing(&self) -> bool {
-        self.sink.as_ref().map(|s| !s.empty()).unwrap_or(false)
-    }
 }

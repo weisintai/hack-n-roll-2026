@@ -23,7 +23,7 @@ impl SyntaxHighlighter {
         }
     }
 
-    fn highlight_python(line: &str) -> Vec<Span> {
+    fn highlight_python(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "def", "class", "if", "else", "elif", "for", "while", "return", "import",
             "from", "as", "try", "except", "finally", "with", "pass", "break", "continue",
@@ -49,7 +49,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_javascript(line: &str) -> Vec<Span> {
+    fn highlight_javascript(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "function", "const", "let", "var", "if", "else", "for", "while", "return",
             "class", "new", "this", "super", "extends", "import", "export", "from",
@@ -76,7 +76,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_typescript(line: &str) -> Vec<Span> {
+    fn highlight_typescript(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "function", "const", "let", "var", "if", "else", "for", "while", "return",
             "class", "new", "this", "super", "extends", "import", "export", "from",
@@ -105,7 +105,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_rust(line: &str) -> Vec<Span> {
+    fn highlight_rust(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "fn", "let", "mut", "const", "static", "if", "else", "match", "loop", "while",
             "for", "return", "struct", "enum", "impl", "trait", "pub", "use", "mod", "crate",
@@ -132,7 +132,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_go(line: &str) -> Vec<Span> {
+    fn highlight_go(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "func", "var", "const", "if", "else", "for", "range", "return", "struct",
             "interface", "type", "package", "import", "go", "defer", "chan", "select",
@@ -158,7 +158,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_java(line: &str) -> Vec<Span> {
+    fn highlight_java(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "public", "private", "protected", "class", "interface", "extends", "implements",
             "new", "this", "super", "static", "final", "abstract", "void",
@@ -188,7 +188,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_haskell(line: &str) -> Vec<Span> {
+    fn highlight_haskell(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "module", "where", "import", "as", "qualified", "hiding",
             "class", "instance", "data", "type", "newtype", "deriving",
@@ -215,7 +215,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_lua(line: &str) -> Vec<Span> {
+    fn highlight_lua(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "and", "break", "do", "else", "elseif", "end", "false", "for", "function",
             "if", "in", "local", "nil", "not", "or", "repeat", "return", "then",
@@ -241,7 +241,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_ocaml(line: &str) -> Vec<Span> {
+    fn highlight_ocaml(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "let", "rec", "in", "fun", "function", "match", "with", "if", "then", "else",
             "type", "module", "struct", "sig", "open", "include", "val", "mutable",
@@ -268,7 +268,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_elixir(line: &str) -> Vec<Span> {
+    fn highlight_elixir(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "def", "defp", "defmodule", "defmacro", "defstruct", "defprotocol", "defimpl",
             "do", "end", "if", "unless", "cond", "case", "when", "receive", "after",
@@ -295,7 +295,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_kotlin(line: &str) -> Vec<Span> {
+    fn highlight_kotlin(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "fun", "val", "var", "class", "object", "interface", "data", "sealed",
             "if", "else", "when", "for", "while", "do", "return", "break", "continue",
@@ -324,7 +324,7 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_swift(line: &str) -> Vec<Span> {
+    fn highlight_swift(line: &str) -> Vec<Span<'_>> {
         let keywords = [
             "func", "let", "var", "class", "struct", "enum", "protocol", "extension",
             "if", "else", "guard", "switch", "case", "default", "for", "while", "repeat",

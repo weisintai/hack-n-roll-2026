@@ -126,7 +126,18 @@ async fn run_app<B: ratatui::backend::Backend>(
                         // Quit from results screen
                         if matches!(app.state, AppState::Results(_)) {
                             if key.code == KeyCode::Esc || key.code == KeyCode::Char('q') {
+                                // Stop audio before quitting
+                                if let Some(ref mut player) = audio_player {
+                                    player.stop();
+                                }
                                 return Ok(());
+                            }
+                            // Stop audio on restart (R key)
+                            if key.code == KeyCode::Enter || key.code == KeyCode::Char('r') {
+                                if let Some(ref mut player) = audio_player {
+                                    player.stop();
+                                }
+                                prev_state_is_submitting = false; // Reset state tracker
                             }
                         }
                         
