@@ -57,6 +57,8 @@ async fn run_app<B: ratatui::backend::Backend>(
     // Audio player for SFX
     let mut audio_player = AudioPlayer::new();
     let mut audio_playing = false;
+    let mut prev_state_is_countdown = false;
+    let mut prev_state_is_submitting = false;
 
     loop {
         // Render
@@ -66,23 +68,42 @@ async fn run_app<B: ratatui::backend::Backend>(
         app.poll_execution();
         app.poll_translation();
         
-        // Handle audio: start.mp3 plays at 0 seconds, end.mp3 when language appears
+        // Handle audio: play different sounds based on app state
         if let Some(ref mut player) = audio_player {
-            // Start audio when transitioning begins (countdown hits 0)
-            let should_start = matches!(app.state, AppState::Transitioning(_));
+            let is_countdown = matches!(app.state, AppState::Countdown(_));
+            let is_transitioning = matches!(app.state, AppState::Transitioning(_));
+            let is_submitting = matches!(app.state, AppState::Compiling(_) | AppState::Running | AppState::Results(_));
             
-            // End audio when the language name appears on screen (Revealing progress > 0.65)
+            // Language revealed during reveal phase (progress > 0.65)
             let language_revealed = match app.state {
                 AppState::Revealing(progress) => progress > 0.65,
                 _ => false,
             };
             
-            if should_start && !audio_playing {
+            // Play countdown sound when countdown window appears
+            if is_countdown && !prev_state_is_countdown {
+                player.play_countdown_sfx();
+                prev_state_is_countdown = true;
+            } else if !is_countdown {
+                prev_state_is_countdown = false;
+            }
+            
+            // Play start sound when transitioning begins (countdown hits 0)
+            if is_transitioning && !audio_playing {
                 player.play_start_sfx();
                 audio_playing = true;
             } else if language_revealed && audio_playing {
+                // Stop start sound and play end sound when language appears
                 player.play_end_sfx();
                 audio_playing = false;
+            }
+            
+            // Play submission/results sound when compiling/running/results (sending to Piston onwards)
+            if is_submitting && !prev_state_is_submitting {
+                player.play_submission_sfx();
+                prev_state_is_submitting = true;
+            } else if !is_submitting {
+                prev_state_is_submitting = false;
             }
         }
 
