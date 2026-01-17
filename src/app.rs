@@ -731,12 +731,15 @@ impl App {
         self.state = AppState::Countdown(5);
         // Pre-select new language now so we can show it during reveal
         self.pending_language = Some(self.current_language.random_except());
+        // START TRANSLATION EARLY - during countdown instead of transition
+        // This gives us 5 extra seconds for the LLM to work
+        self.start_llm_translation();
     }
 
     fn start_transition(&mut self) {
         self.transition_start = Some(Instant::now());
         self.state = AppState::Transitioning(0.0);
-        self.start_llm_translation();
+        // Translation already started during countdown
     }
 
     fn start_reveal(&mut self) {
@@ -1959,10 +1962,37 @@ impl App {
             
             if reveal_progress > 0.8 {
                 message.push(Line::from(""));
-                message.push(Line::from(Span::styled(
-                    "GET READY TO LEARN A NEW LANGUAGE, BUDDY!",
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-                )));
+                // Show loading animation if translation isn't ready yet
+                if !self.translation_ready() {
+                    // Animated loading dots
+                    let dots = match self.glitch_frame % 4 {
+                        0 => "   ",
+                        1 => ".  ",
+                        2 => ".. ",
+                        _ => "...",
+                    };
+                    message.push(Line::from(Span::styled(
+                        format!("[ TRANSLATING CODE{} ]", dots),
+                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                    )));
+                    message.push(Line::from(Span::styled(
+                        "╔═══════════════════════════════╗",
+                        Style::default().fg(Color::Yellow)
+                    )));
+                    message.push(Line::from(Span::styled(
+                        "║  ▓▓▓▒▒▒░░░ PROCESSING ░░░▒▒▒▓▓▓  ║",
+                        Style::default().fg(Color::Yellow)
+                    )));
+                    message.push(Line::from(Span::styled(
+                        "╚═══════════════════════════════╝",
+                        Style::default().fg(Color::Yellow)
+                    )));
+                } else {
+                    message.push(Line::from(Span::styled(
+                        "GET READY TO LEARN A NEW LANGUAGE, BUDDY!",
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    )));
+                }
             }
         }
         
