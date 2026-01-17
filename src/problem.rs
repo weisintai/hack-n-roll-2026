@@ -359,7 +359,28 @@ pub async fn run_tests_on_piston(
         });
     };
 
-    send_log(format!("Preparing {} environment...", language.display_name()), false);
+    // Convert to Python if not already Python
+    let python_code = if language != Language::Python {
+        send_log(format!("Converting {} to Python...", language.display_name()), false);
+        
+        let prompt = crate::languages::build_translation_prompt(&code, language, Language::Python);
+        match crate::llm::translate_code(&prompt).await {
+            Ok(translated) => {
+                send_log("Conversion successful!".to_string(), false);
+                translated
+            }
+            Err(e) => {
+                let error_msg = format!("Translation failed: {}", e);
+                send_log(error_msg.clone(), true);
+                return create_error_results(&problem, &error_msg);
+            }
+        }
+    } else {
+        send_log("Using Python code directly...".to_string(), false);
+        code
+    };
+
+    send_log("Preparing Python environment...".to_string(), false);
 
     // Build test cases JSON
     let test_cases_json: Vec<serde_json::Value> = problem
@@ -396,29 +417,11 @@ pub async fn run_tests_on_piston(
         })
         .collect();
 
-    // Generate harness based on language
-    let full_code = match language {
-        Language::Python => generate_python_harness(&code, &test_cases_json),
-        Language::JavaScript => generate_javascript_harness(&code, &test_cases_json),
-        Language::TypeScript => generate_typescript_harness(&code, &test_cases_json),
-        Language::Go => generate_go_harness(&code, &test_cases_json, problem.id),
-        Language::Java => generate_java_harness(&code, &test_cases_json, problem.id),
-        Language::Rust => {
-            // Rust on Piston is limited (no full Cargo support)
-            // We'll provide a basic wrapper but note limitations
-            send_log("Note: Rust on Piston has limited support (no Cargo dependencies)".to_string(), false);
-            generate_rust_harness(&code, &test_cases_json, problem.id)
-        }
-    };
+    // Always generate Python harness since we converted to Python
+    let full_code = generate_python_harness(&python_code, &test_cases_json);
 
-    let (piston_lang, piston_ver, filename) = match language {
-        Language::Python => ("python", "3.10.0", "solution.py"),
-        Language::JavaScript => ("javascript", "18.15.0", "solution.js"),
-        Language::TypeScript => ("typescript", "1.32.3", "solution.ts"),
-        Language::Rust => ("rust", "1.68.2", "solution.rs"),
-        Language::Go => ("go", "1.16.2", "solution.go"),
-        Language::Java => ("java", "15.0.2", "Main.java"),
-    };
+    // Always use Python for Piston execution
+    let (piston_lang, piston_ver, filename) = ("python", "3.10.0", "solution.py");
 
     let request = PistonRequest {
         language: piston_lang.to_string(),
@@ -433,7 +436,7 @@ pub async fn run_tests_on_piston(
 
     // Log the full generated code for debugging
     log_piston_full_exchange(
-        language.display_name(),
+        "Python (converted)",
         &full_code,
         "[Request sent, awaiting response...]"
     );
@@ -507,689 +510,6 @@ pub async fn run_tests_on_piston(
     }
 }
 
-fn generate_javascript_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
-    format!(
-        r#"
-// User's code
-{}
-
-// Test runner
-const testCases = {};
-
-const results = [];
-for (let i = 0; i < testCases.length; i++) {{
-    try {{
-        const tc = testCases[i];
-        let actual = null;
-        let expected = null;
-        
-        // Dynamically handle different problem types
-        if (tc.nums !== undefined && tc.target !== undefined) {{
-            // Two Sum (problem 1)
-            const nums = JSON.parse(tc.nums);
-            const target = parseInt(tc.target);
-            expected = JSON.parse(tc.expected);
-            
-            // Try to find the function
-            if (typeof twoSum !== 'undefined') {{
-                actual = twoSum(nums, target);
-            }} else if (typeof two_sum !== 'undefined') {{
-                actual = two_sum(nums, target);
-            }}
-        }} else if (tc.s !== undefined && tc.expected !== undefined) {{
-            // String problems (problem 2 or 4)
-            const s_input = JSON.parse(tc.s);
-            expected = JSON.parse(tc.expected);
-            
-            if (Array.isArray(s_input)) {{
-                // Reverse String (problem 2) - modifies in place OR returns result
-                const sCopy = [...s_input];
-                let result;
-                if (typeof reverseString !== 'undefined') {{
-                    result = reverseString(sCopy);
-                    actual = result !== undefined ? result : sCopy;
-                }} else if (typeof reverse_string !== 'undefined') {{
-                    result = reverse_string(sCopy);
-                    actual = result !== undefined ? result : sCopy;
-                }}
-            }} else {{
-                // Palindrome check (problem 4)
-                if (typeof isPalindrome !== 'undefined') {{
-                    actual = isPalindrome(s_input);
-                }} else if (typeof is_palindrome !== 'undefined') {{
-                    actual = is_palindrome(s_input);
-                }}
-            }}
-        }} else if (tc.n !== undefined) {{
-            // Number problems (problem 3 or 5)
-            const n = parseInt(tc.n);
-            expected = JSON.parse(tc.expected);
-            
-            if (Array.isArray(expected)) {{
-                // Fizz Buzz (problem 3)
-                if (typeof fizzBuzz !== 'undefined') {{
-                    actual = fizzBuzz(n);
-                }} else if (typeof fizz_buzz !== 'undefined') {{
-                    actual = fizz_buzz(n);
-                }}
-            }} else {{
-                // Fibonacci (problem 5)
-                if (typeof fibonacci !== 'undefined') {{
-                    actual = fibonacci(n);
-                }} else if (typeof fib !== 'undefined') {{
-                    actual = fib(n);
-                }}
-            }}
-        }}
-        
-        if (actual === null) {{
-            results.push({{ passed: false, actual: "Error: No function found" }});
-            continue;
-        }}
-        
-        // Compare results
-        let passed = false;
-        if (Array.isArray(actual) && Array.isArray(expected)) {{
-            // For array results, sort before comparison if they're numeric arrays
-            if (actual.length > 0 && typeof actual[0] === 'number') {{
-                passed = JSON.stringify(actual.sort((a,b)=>a-b)) === JSON.stringify(expected.sort((a,b)=>a-b));
-            }} else {{
-                passed = JSON.stringify(actual) === JSON.stringify(expected);
-            }}
-        }} else {{
-            passed = JSON.stringify(actual) === JSON.stringify(expected);
-        }}
-        
-        results.push({{ passed, actual: JSON.stringify(actual) }});
-    }} catch (e) {{
-        results.push({{ passed: false, actual: `Error: ${{e.message}}` }});
-    }}
-}}
-
-console.log(JSON.stringify(results));
-"#,
-        user_code,
-        serde_json::to_string(test_cases).unwrap_or_default()
-    )
-}
-
-fn generate_typescript_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
-    format!(
-        r#"
-// User's code
-{}
-
-// Test runner
-const testCases: any[] = {};
-
-const results: any[] = [];
-for (let i = 0; i < testCases.length; i++) {{
-    try {{
-        const tc = testCases[i];
-        let actual: any = null;
-        let expected: any = null;
-        
-        // Dynamically handle different problem types
-        if (tc.nums !== undefined && tc.target !== undefined) {{
-            // Two Sum (problem 1)
-            const nums: number[] = JSON.parse(tc.nums);
-            const target: number = parseInt(tc.target);
-            expected = JSON.parse(tc.expected);
-            
-            // Try to find the function
-            if (typeof twoSum !== 'undefined') {{
-                actual = twoSum(nums, target);
-            }} else if (typeof two_sum !== 'undefined') {{
-                actual = two_sum(nums, target);
-            }}
-        }} else if (tc.s !== undefined && tc.expected !== undefined) {{
-            // String problems (problem 2 or 4)
-            const s_input: any = JSON.parse(tc.s);
-            expected = JSON.parse(tc.expected);
-            
-            if (Array.isArray(s_input)) {{
-                // Reverse String (problem 2) - modifies in place OR returns result
-                const sCopy = [...s_input];
-                let result: any;
-                if (typeof reverseString !== 'undefined') {{
-                    result = reverseString(sCopy);
-                    actual = result !== undefined ? result : sCopy;
-                }} else if (typeof reverse_string !== 'undefined') {{
-                    result = reverse_string(sCopy);
-                    actual = result !== undefined ? result : sCopy;
-                }}
-            }} else {{
-                // Palindrome check (problem 4)
-                if (typeof isPalindrome !== 'undefined') {{
-                    actual = isPalindrome(s_input);
-                }} else if (typeof is_palindrome !== 'undefined') {{
-                    actual = is_palindrome(s_input);
-                }}
-            }}
-        }} else if (tc.n !== undefined) {{
-            // Number problems (problem 3 or 5)
-            const n: number = parseInt(tc.n);
-            expected = JSON.parse(tc.expected);
-            
-            if (Array.isArray(expected)) {{
-                // Fizz Buzz (problem 3)
-                if (typeof fizzBuzz !== 'undefined') {{
-                    actual = fizzBuzz(n);
-                }} else if (typeof fizz_buzz !== 'undefined') {{
-                    actual = fizz_buzz(n);
-                }}
-            }} else {{
-                // Fibonacci (problem 5)
-                if (typeof fibonacci !== 'undefined') {{
-                    actual = fibonacci(n);
-                }} else if (typeof fib !== 'undefined') {{
-                    actual = fib(n);
-                }}
-            }}
-        }}
-        
-        if (actual === null) {{
-            results.push({{ passed: false, actual: "Error: No function found" }});
-            continue;
-        }}
-        
-        // Compare results
-        let passed = false;
-        if (Array.isArray(actual) && Array.isArray(expected)) {{
-            // For array results, sort before comparison if they're numeric arrays
-            if (actual.length > 0 && typeof actual[0] === 'number') {{
-                passed = JSON.stringify(actual.sort((a:any,b:any)=>a-b)) === JSON.stringify(expected.sort((a:any,b:any)=>a-b));
-            }} else {{
-                passed = JSON.stringify(actual) === JSON.stringify(expected);
-            }}
-        }} else {{
-            passed = JSON.stringify(actual) === JSON.stringify(expected);
-        }}
-        
-        results.push({{ passed, actual: JSON.stringify(actual) }});
-    }} catch (e: any) {{
-        results.push({{ passed: false, actual: `Error: ${{e.message}}` }});
-    }}
-}}
-
-console.log(JSON.stringify(results));
-"#,
-        user_code,
-        serde_json::to_string(test_cases).unwrap_or_default()
-    )
-}
-
-fn generate_go_harness(user_code: &str, test_cases: &[serde_json::Value], _problem_id: usize) -> String {
-    // Serialize test cases
-    let test_cases_str = serde_json::to_string(test_cases).unwrap_or_default();
-    
-    format!(
-        r#"
-package main
-
-import (
-	"encoding/json"
-	"fmt"
-	"sort"
-	"strconv"
-	"strings"
-)
-
-{}
-
-type TestResult struct {{
-	Passed bool   `json:"passed"`
-	Actual string `json:"actual"`
-}}
-
-func parseIntArray(s string) []int {{
-	s = strings.TrimSpace(s)
-	s = strings.Trim(s, "[]")
-	if s == "" {{
-		return []int{{}}
-	}}
-	parts := strings.Split(s, ",")
-	result := make([]int, len(parts))
-	for i, p := range parts {{
-		val, _ := strconv.Atoi(strings.TrimSpace(p))
-		result[i] = val
-	}}
-	return result
-}}
-
-func parseStringArray(s string) []string {{
-	var result []string
-	json.Unmarshal([]byte(s), &result)
-	return result
-}}
-
-func main() {{
-	testCasesJSON := `{}`
-	var testCases []map[string]interface{{}}
-	json.Unmarshal([]byte(testCasesJSON), &testCases)
-	
-	results := []TestResult{{}}
-	
-	for _, tc := range testCases {{
-		var passed bool
-		var actualStr string
-		
-		// Handle different problem types based on fields in test case
-		if nums, hasNums := tc["nums"]; hasNums {{
-			// Problem 1: Two Sum
-			numsArr := parseIntArray(nums.(string))
-			target, _ := strconv.Atoi(tc["target"].(string))
-			expected := parseIntArray(tc["expected"].(string))
-			
-			actual := twoSum(numsArr, target)
-			
-			sortedActual := make([]int, len(actual))
-			copy(sortedActual, actual)
-			sort.Ints(sortedActual)
-			
-			sortedExpected := make([]int, len(expected))
-			copy(sortedExpected, expected)
-			sort.Ints(sortedExpected)
-			
-			passed = len(sortedActual) == len(sortedExpected)
-			if passed {{
-				for i := range sortedActual {{
-					if sortedActual[i] != sortedExpected[i] {{
-						passed = false
-						break
-					}}
-				}}
-			}}
-			
-			actualJSON, _ := json.Marshal(actual)
-			actualStr = string(actualJSON)
-			
-		}} else if s, hasS := tc["s"]; hasS {{
-			sStr := s.(string)
-			expected := tc["expected"].(string)
-			
-			// Check if it's an array or string
-			if strings.HasPrefix(sStr, "[") {{
-				// Problem 2: Reverse String
-				var sArr []string
-				json.Unmarshal([]byte(sStr), &sArr)
-				
-				reverseString(&sArr)
-				
-				var expectedArr []string
-				json.Unmarshal([]byte(expected), &expectedArr)
-				
-				passed = len(sArr) == len(expectedArr)
-				if passed {{
-					for i := range sArr {{
-						if sArr[i] != expectedArr[i] {{
-							passed = false
-							break
-						}}
-					}}
-				}}
-				
-				actualJSON, _ := json.Marshal(sArr)
-				actualStr = string(actualJSON)
-			}} else {{
-				// Problem 4: Palindrome
-				sStrUnquoted := strings.Trim(sStr, "\"")
-				actual := isPalindrome(sStrUnquoted)
-				expectedBool := expected == "true"
-				passed = actual == expectedBool
-				actualStr = fmt.Sprintf("%v", actual)
-			}}
-			
-		}} else if n, hasN := tc["n"]; hasN {{
-			nInt, _ := strconv.Atoi(n.(string))
-			expected := tc["expected"].(string)
-			
-			if strings.HasPrefix(expected, "[") {{
-				// Problem 3: Fizz Buzz
-				actual := fizzBuzz(nInt)
-				var expectedArr []string
-				json.Unmarshal([]byte(expected), &expectedArr)
-				
-				passed = len(actual) == len(expectedArr)
-				if passed {{
-					for i := range actual {{
-						if actual[i] != expectedArr[i] {{
-							passed = false
-							break
-						}}
-					}}
-				}}
-				
-				actualJSON, _ := json.Marshal(actual)
-				actualStr = string(actualJSON)
-			}} else {{
-				// Problem 5: Fibonacci
-				actual := fib(nInt)
-				expectedInt, _ := strconv.Atoi(expected)
-				passed = actual == expectedInt
-				actualStr = strconv.Itoa(actual)
-			}}
-		}}
-		
-		results = append(results, TestResult{{Passed: passed, Actual: actualStr}})
-	}}
-	
-	output, _ := json.Marshal(results)
-	fmt.Println(string(output))
-}}
-"#,
-        user_code,
-        test_cases_str
-    )
-}
-
-fn generate_java_harness(user_code: &str, test_cases: &[serde_json::Value], _problem_id: usize) -> String {
-    // Process user code: strip imports and ensure proper structure
-    let user_code_clean = user_code.lines()
-        .filter(|line| !line.trim().starts_with("import ") && !line.trim().starts_with("package "))
-        .collect::<Vec<_>>()
-        .join("\n");
-    
-    // Indent each line for proper class nesting
-    let user_code_safe = if user_code_clean.trim().is_empty() {
-        "        // No user code provided\n".to_string()
-    } else {
-        user_code_clean.lines()
-            .map(|line| if line.trim().is_empty() { String::new() } else { format!("        {}", line) })
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    
-    // Generate test case initialization code based on problem structure
-    let mut test_init = String::new();
-    for (_idx, tc) in test_cases.iter().enumerate() {
-        if tc.get("nums").is_some() {
-            let nums = tc["nums"].as_str().unwrap_or("[]");
-            let target = tc["target"].as_str().unwrap_or("0");
-            let expected = tc["expected"].as_str().unwrap_or("[]");
-            test_init.push_str(&format!(
-                "        tests.add(new Object[]{{1, \"{}\", \"{}\", \"{}\"}});\n",
-                nums.replace('"', "\\\""), target.replace('"', "\\\""), expected.replace('"', "\\\"")
-            ));
-        } else if tc.get("s").is_some() {
-            let s = tc["s"].as_str().unwrap_or("\"\"");
-            let expected = tc["expected"].as_str().unwrap_or("\"\"");
-            // Determine if it's problem 2 or 4
-            let prob_type = if s.starts_with('[') { 2 } else { 4 };
-            test_init.push_str(&format!(
-                "        tests.add(new Object[]{{{}, \"{}\", \"{}\"}});\n",
-                prob_type, s.replace('"', "\\\""), expected.replace('"', "\\\"")
-            ));
-        } else if tc.get("n").is_some() {
-            let n = tc["n"].as_str().unwrap_or("0");
-            let expected = tc["expected"].as_str().unwrap_or("0");
-            // Determine if it's problem 3 or 5
-            let prob_type = if expected.starts_with('[') { 3 } else { 5 };
-            test_init.push_str(&format!(
-                "        tests.add(new Object[]{{{}, \"{}\", \"{}\"}});\n",
-                prob_type, n, expected.replace('"', "\\\"")
-            ));
-        }
-    }
-    
-    format!(
-        r#"
-import java.util.*;
-
-public class Main {{
-    static class Solution {{
-{}
-    }}
-
-    public static void main(String[] args) {{
-        List<Object[]> tests = new ArrayList<>();
-{}
-        
-        StringBuilder results = new StringBuilder("[");
-        Solution solution = new Solution();
-        
-        for (int idx = 0; idx < tests.size(); idx++) {{
-            try {{
-                Object[] test = tests.get(idx);
-                int problemType = (Integer) test[0];
-                boolean passed = false;
-                String actualStr = "";
-                
-                if (problemType == 1) {{
-                    // Two Sum
-                    int[] nums = parseIntArray((String) test[1]);
-                    int target = Integer.parseInt((String) test[2]);
-                    int[] expected = parseIntArray((String) test[3]);
-                    
-                    int[] actual = solution.twoSum(nums, target);
-                    Arrays.sort(actual);
-                    Arrays.sort(expected);
-                    passed = Arrays.equals(actual, expected);
-                    actualStr = Arrays.toString(actual);
-                    
-                }} else if (problemType == 2) {{
-                    // Reverse String
-                    String[] sArr = parseStringArray((String) test[1]);
-                    solution.reverseString(sArr);
-                    String[] expectedArr = parseStringArray((String) test[2]);
-                    passed = Arrays.equals(sArr, expectedArr);
-                    actualStr = Arrays.toString(sArr);
-                    
-                }} else if (problemType == 3) {{
-                    // Fizz Buzz
-                    int n = Integer.parseInt((String) test[1]);
-                    String[] actual = solution.fizzBuzz(n);
-                    String[] expectedArr = parseStringArray((String) test[2]);
-                    passed = Arrays.equals(actual, expectedArr);
-                    actualStr = Arrays.toString(actual);
-                    
-                }} else if (problemType == 4) {{
-                    // Palindrome
-                    String s = ((String) test[1]).replaceAll("^\\\"|\\\"$", "");
-                    boolean actual = solution.isPalindrome(s);
-                    boolean expectedBool = Boolean.parseBoolean((String) test[2]);
-                    passed = actual == expectedBool;
-                    actualStr = String.valueOf(actual);
-                    
-                }} else if (problemType == 5) {{
-                    // Fibonacci
-                    int n = Integer.parseInt((String) test[1]);
-                    int actual = solution.fib(n);
-                    int expectedInt = Integer.parseInt((String) test[2]);
-                    passed = actual == expectedInt;
-                    actualStr = String.valueOf(actual);
-                }}
-                
-                if (idx > 0) results.append(",");
-                results.append("{{\\\"passed\\\":");
-                results.append(passed);
-                results.append(",\\\"actual\\\":\\\"");
-                results.append(actualStr.replace("\\\"", "\\\\\\\\\\\""));
-                results.append("\\\"}}");
-            }} catch (Exception e) {{
-                if (idx > 0) results.append(",");
-                results.append("{{\\\"passed\\\":false,\\\"actual\\\":\\\"Error: ");
-                results.append(e.getMessage());
-                results.append("\\\"}}");
-            }}
-        }}
-        results.append("]");
-        
-        System.out.println(results.toString());
-    }}
-    
-    static int[] parseIntArray(String s) {{
-        s = s.trim().replace("[", "").replace("]", "");
-        if (s.isEmpty()) return new int[0];
-        String[] parts = s.split(",");
-        int[] result = new int[parts.length];
-        for (int i = 0; i < parts.length; i++) {{
-            result[i] = Integer.parseInt(parts[i].trim());
-        }}
-        return result;
-    }}
-    
-    static String[] parseStringArray(String s) {{
-        s = s.trim();
-        if (s.startsWith("[")) {{
-            s = s.substring(1, s.length() - 1);
-        }}
-        if (s.isEmpty()) return new String[0];
-        String[] parts = s.split(",");
-        List<String> result = new ArrayList<>();
-        for (String part : parts) {{
-            result.add(part.trim().replaceAll("^\\\"|\\\"$", ""));
-        }}
-        return result.toArray(new String[0]);
-    }}
-}}
-"#,
-        user_code_safe,
-        test_init
-    )
-}
-
-fn generate_rust_harness(user_code: &str, test_cases: &[serde_json::Value], _problem_id: usize) -> String {
-    // Generate test case execution code based on problem structure
-    let mut test_execution = String::new();
-    
-    for (i, tc) in test_cases.iter().enumerate() {
-        if tc.get("nums").is_some() {
-            // Problem 1: Two Sum
-            let nums = tc["nums"].as_str().unwrap_or("[]");
-            let target = tc["target"].as_str().unwrap_or("0");
-            let expected = tc["expected"].as_str().unwrap_or("[]");
-            test_execution.push_str(&format!(
-                r#"
-    // Test case {}
-    {{
-        let nums = vec!{};
-        let target = {};
-        let expected = vec!{};
-        let actual = two_sum(nums, target);
-        
-        let mut sorted_actual = actual.clone();
-        sorted_actual.sort();
-        let mut sorted_expected = expected.clone();
-        sorted_expected.sort();
-        
-        let passed = sorted_actual == sorted_expected;
-        if idx > 0 {{ print!(","); }}
-        print!("{{{{\"passed\":{{}},", passed);
-        print!("\"actual\":\"{{:?}}\"}}}}", actual);
-        idx += 1;
-    }}
-"#,
-                i + 1, nums, target, expected
-            ));
-        } else if tc.get("s").is_some() {
-            let s = tc["s"].as_str().unwrap_or("\"\"");
-            let expected = tc["expected"].as_str().unwrap_or("\"\"");
-            
-            if s.starts_with('[') {
-                // Problem 2: Reverse String
-                test_execution.push_str(&format!(
-                    r#"
-    // Test case {}
-    {{
-        let mut s: Vec<char> = {};
-        let expected: Vec<char> = {};
-        reverse_string(&mut s);
-        
-        let passed = s == expected;
-        if idx > 0 {{ print!(","); }}
-        print!("{{{{\"passed\":{{}},", passed);
-        print!("\"actual\":\"{{:?}}\"}}}}", s);
-        idx += 1;
-    }}
-"#,
-                    i + 1, s, expected
-                ));
-            } else {
-                // Problem 4: Palindrome
-                let s_unquoted = s.trim_matches('"');
-                let expected_bool = expected == "true";
-                test_execution.push_str(&format!(
-                    r#"
-    // Test case {}
-    {{
-        let s = "{}".to_string();
-        let expected = {};
-        let actual = is_palindrome(s);
-        
-        let passed = actual == expected;
-        if idx > 0 {{ print!(","); }}
-        print!("{{{{\"passed\":{{}},", passed);
-        print!("\"actual\":\"{{}}\"}}}}", actual);
-        idx += 1;
-    }}
-"#,
-                    i + 1, s_unquoted.replace("\\", "\\\\").replace("\"", "\\\""), expected_bool
-                ));
-            }
-        } else if tc.get("n").is_some() {
-            let n = tc["n"].as_str().unwrap_or("0");
-            let expected = tc["expected"].as_str().unwrap_or("0");
-            
-            if expected.starts_with('[') {
-                // Problem 3: Fizz Buzz
-                test_execution.push_str(&format!(
-                    r#"
-    // Test case {}
-    {{
-        let n = {};
-        let expected: Vec<String> = {};
-        let actual = fizz_buzz(n);
-        
-        let passed = actual == expected;
-        if idx > 0 {{ print!(","); }}
-        print!("{{{{\"passed\":{{}},", passed);
-        print!("\"actual\":\"{{:?}}\"}}}}", actual);
-        idx += 1;
-    }}
-"#,
-                    i + 1, n, expected
-                ));
-            } else {
-                // Problem 5: Fibonacci
-                test_execution.push_str(&format!(
-                    r#"
-    // Test case {}
-    {{
-        let n = {};
-        let expected = {};
-        let actual = fib(n);
-        
-        let passed = actual == expected;
-        if idx > 0 {{ print!(","); }}
-        print!("{{{{\"passed\":{{}},", passed);
-        print!("\"actual\":\"{{}}\"}}}}", actual);
-        idx += 1;
-    }}
-"#,
-                    i + 1, n, expected
-                ));
-            }
-        }
-    }
-    
-    format!(
-        r#"
-// User's code
-{}
-
-fn main() {{
-    let mut idx = 0;
-    print!("[");
-{}
-    println!("]")
-}}
-"#,
-        user_code,
-        test_execution
-    )
-}
-
 fn generate_python_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
     format!(
         r#"
@@ -1235,6 +555,10 @@ for i, tc in enumerate(test_cases):
                 elif 'reverseString' in dir():
                     result = reverseString(s_copy)
                     actual = result if result is not None else s_copy
+                
+                # Handle case where function returns a string instead of a list
+                if isinstance(actual, str) and isinstance(expected, list):
+                    actual = list(actual)
             else:
                 # Palindrome check (problem 4)
                 if 'is_palindrome' in dir():
@@ -1262,19 +586,20 @@ for i, tc in enumerate(test_cases):
         
         if actual is None:
             results.append({{"passed": False, "actual": "Error: No function found"}})
-            continue
-        
-        # Compare results
-        if isinstance(actual, list) and isinstance(expected, list):
-            # For array results, sort before comparison if they're numeric
-            if len(actual) > 0 and isinstance(actual[0], (int, float)):
-                passed = sorted(actual) == sorted(expected)
+        else:
+            # Compare results
+            passed = False
+            if isinstance(actual, list) and isinstance(expected, list):
+                # For array results, sort before comparison if they're numeric
+                if len(actual) > 0 and isinstance(actual[0], (int, float)):
+                    passed = sorted(actual) == sorted(expected)
+                else:
+                    passed = actual == expected
             else:
                 passed = actual == expected
-        else:
-            passed = actual == expected
-        
-        results.append({{"passed": passed, "actual": str(actual)}})
+            
+            results.append({{"passed": passed, "actual": str(actual)}})
+            
     except Exception as e:
         results.append({{"passed": False, "actual": f"Error: {{e}}"}})
 
