@@ -31,7 +31,8 @@ pub enum AppState {
 #[derive(Debug, Clone)]
 pub enum ExecutionEvent {
     Log(OutputLine),
-    Finished(TestResults),
+    Finished(TestResults),      // For submit - shows full results screen
+    RunFinished(TestResults),    // For run - shows results in output panel
 }
 
 #[derive(Debug, Clone)]
@@ -265,8 +266,62 @@ impl App {
                         }
                     }
                     ExecutionEvent::Finished(results) => {
+                        // Submit mode - show full results screen
                         self.test_results = Some(results.clone());
                         self.state = AppState::Results(results);
+                        should_close = true;
+                    }
+                    ExecutionEvent::RunFinished(results) => {
+                        // Run mode - show results inline in output panel
+                        self.test_results = Some(results.clone());
+                        
+                        // Add blank line
+                        self.execution_output.push(OutputLine { 
+                            text: "".to_string(), 
+                            is_error: false 
+                        });
+                        
+                        // Add results summary
+                        let score_text = format!(
+                            "RESULTS: {}/{} tests passed ({}%)", 
+                            results.passed, 
+                            results.total,
+                            (results.passed * 100) / results.total.max(1)
+                        );
+                        self.execution_output.push(OutputLine { 
+                            text: score_text, 
+                            is_error: results.passed != results.total 
+                        });
+                        
+                        self.execution_output.push(OutputLine { 
+                            text: "─".repeat(60), 
+                            is_error: false 
+                        });
+                        
+                        // Add individual test results
+                        for detail in &results.details {
+                            let status = if detail.passed { "✓ PASS" } else { "✗ FAIL" };
+                            let status_line = format!("{} Test #{}", status, detail.case_number);
+                            self.execution_output.push(OutputLine { 
+                                text: status_line, 
+                                is_error: !detail.passed 
+                            });
+                            
+                            if !detail.passed {
+                                self.execution_output.push(OutputLine { 
+                                    text: format!("  Input: {}", detail.input), 
+                                    is_error: false 
+                                });
+                                self.execution_output.push(OutputLine { 
+                                    text: format!("  Expected: {}", detail.expected), 
+                                    is_error: false 
+                                });
+                                self.execution_output.push(OutputLine { 
+                                    text: format!("  Got: {}", detail.actual), 
+                                    is_error: true 
+                                });
+                            }
+                        }
                         should_close = true;
                     }
                 }
@@ -418,7 +473,7 @@ impl App {
                     self.randomize_problem();
                     return;
                 }
-                // Cmd+R or Ctrl+C to run (show output)
+                // Cmd/Ctrl+C to run (show output)
                 KeyCode::Char('c') | KeyCode::Char('C') => {
                     self.show_output_panel = true;
                     self.run_code();
@@ -737,10 +792,15 @@ impl App {
         }
     }
 
-    fn run_code(&mut self) {
+    /// Shared helper to execute code and run tests
+    fn execute_code(&mut self, is_submit: bool) {
         self.execution_output.clear();
         self.execution_output.push(OutputLine { 
-            text: "Running code on Piston API...".to_string(), 
+            text: if is_submit { 
+                "Compiling and sending to Piston API...".to_string() 
+            } else { 
+                "Running code on Piston API...".to_string() 
+            }, 
             is_error: false 
         });
 
@@ -752,15 +812,22 @@ impl App {
         let problem = self.problem.clone();
         let language = self.current_language;
         
-        // Spawn async execution (don't change state to Results)
+        // Spawn async execution
         tokio::spawn(async move {
-             let _results = run_tests_on_piston(code, problem, language, tx.clone()).await;
-             // Jucompletion, don't send Results event
-             let _ = tx.send(ExecutionEvent::Log(OutputLine {
-                 text: "Execution completed.".to_string(),
-                 is_error: false
-             })).await;
+            let results = run_tests_on_piston(code, problem, language, tx.clone()).await;
+            
+            // Send different event based on mode
+            let event = if is_submit {
+                ExecutionEvent::Finished(results)
+            } else {
+                ExecutionEvent::RunFinished(results)
+            };
+            let _ = tx.send(event).await;
         });
+    }
+
+    fn run_code(&mut self) {
+        self.execute_code(false);  // false = run mode (inline results)
     }
 
     fn move_to_line_start(&mut self) {
@@ -936,27 +1003,7 @@ impl App {
 
     fn submit(&mut self) {
         self.state = AppState::Compiling(0.0);
-        self.execution_output.clear();
-        self.execution_output.push(OutputLine { 
-            text: "Compiling and sending to Piston API...".to_string(), 
-            is_error: false 
-        });
-
-        let (tx, rx) = mpsc::channel(32);
-        self.output_rx = Some(rx);
-        
-        // Clone data for async task
-        let code = self.code.clone();
-        let problem = self.problem.clone();
-        let language = self.current_language;
-        
-        // Spawn async token
-        tokio::spawn(async move {
-             let results = run_tests_on_piston(code, problem, language, tx.clone()).await;
-             
-             // Send results
-             let _ = tx.send(ExecutionEvent::Finished(results)).await;
-        });
+        self.execute_code(true);
     }
 
     pub fn render(&mut self, frame: &mut Frame) {
@@ -1218,7 +1265,7 @@ impl App {
     fn render_output_panel(&self, frame: &mut Frame, area: Rect) {
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(" Output (Cmd+R to run) ")
+            .title(" Output (^C to run) ")
             .border_style(Style::default().fg(Color::Green));
             
         let inner_area = block.inner(area);
@@ -1271,8 +1318,7 @@ impl App {
             Span::styled("Alt+←/→ ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::styled("Word", Style::default().fg(Color::White)),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Cmd+C ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled("^C ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::styled("Compile", Style::default().fg(Color::White)),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
             Span::styled("^Q ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
