@@ -25,7 +25,6 @@ pub enum AppState {
     Revealing(f32),          // 0.0 to 1.0 progress (reveal new language/problem)
     Compiling(f32),     // 0.0 to 1.0 progress (simulated)
     Running,            // Executing on Piston
-    Finished(String),   // Final status message
     Results(TestResults),
 }
 
@@ -38,6 +37,7 @@ pub enum ExecutionEvent {
 #[derive(Debug, Clone)]
 pub enum TranslationEvent {
     Success(String),
+    #[allow(dead_code)]
     Failure(String),
 }
 
@@ -378,7 +378,6 @@ impl App {
         match self.state {
             AppState::Coding | AppState::Countdown(_) => self.handle_coding_key(key),
             AppState::Results(_) => self.handle_results_key(key),
-            AppState::Finished(_) => self.handle_finished_key(key),
              _ => {}, // Ignore input during transitions and execution
         }
     }
@@ -563,15 +562,6 @@ impl App {
             }
             _ => {}
         }
-    }
-
-    fn handle_finished_key(&mut self, key: KeyEvent) {
-         match key.code {
-            KeyCode::Enter | KeyCode::Esc => {
-                 self.state = AppState::Coding; // Return to editor on error/finish without results
-            }
-            _ => {}
-         }
     }
 
 
@@ -765,7 +755,7 @@ impl App {
         // Spawn async execution (don't change state to Results)
         tokio::spawn(async move {
              let _results = run_tests_on_piston(code, problem, language, tx.clone()).await;
-             // Just log completion, don't send Results event
+             // Jucompletion, don't send Results event
              let _ = tx.send(ExecutionEvent::Log(OutputLine {
                  text: "Execution completed.".to_string(),
                  is_error: false
@@ -834,21 +824,6 @@ impl App {
                     self.code.drain(current_pos..self.cursor_position);
                     self.cursor_position = current_pos;
                 }
-                return;
-            }
-            current_pos += line.len() + 1;
-        }
-    }
-
-    fn indent_line(&mut self) {
-        let lines: Vec<&str> = self.code.split('\n').collect();
-        let mut current_pos = 0;
-        
-        for line in lines.iter() {
-            if current_pos + line.len() >= self.cursor_position {
-                // Insert tab at start of line
-                self.code.insert_str(current_pos, "    ");
-                self.cursor_position += 4;
                 return;
             }
             current_pos += line.len() + 1;
@@ -992,7 +967,6 @@ impl App {
             AppState::Revealing(progress) => self.render_reveal(frame, *progress),
             AppState::Compiling(progress) => self.render_compiling(frame, *progress),
             AppState::Running => self.render_running(frame),
-            AppState::Finished(msg) => self.render_finished(frame, msg),
             AppState::Results(results) => self.render_results(frame, results),
         }
     }
@@ -1033,25 +1007,6 @@ impl App {
             .scroll((self.scroll_offset as u16, 0));
             
         frame.render_widget(paragraph, inner_area);
-    }
-
-    fn render_finished(&self, frame: &mut Frame, msg: &str) {
-         let size = frame.size();
-        let area = centered_rect(60, 20, size);
-        
-        let text = vec![
-            Line::from(Span::styled("Execution Finished", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))),
-            Line::from(""),
-            Line::from(msg),
-            Line::from(""),
-            Line::from(Span::styled("Press Enter to continue", Style::default().fg(Color::DarkGray))),
-        ];
-        
-        let p = Paragraph::new(text)
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Green)))
-            .alignment(Alignment::Center);
-            
-        frame.render_widget(p, area);
     }
 
 
@@ -1479,7 +1434,7 @@ impl App {
         frame.render_widget(paragraph, size);
     }
 
-    fn render_transition(&self, frame: &mut Frame, progress: f32) {
+    fn render_transition(&self, frame: &mut Frame, _progress: f32) {
         let size = frame.size();
         let progress = if let AppState::Transitioning(p) = self.state {
             p

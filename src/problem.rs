@@ -340,9 +340,7 @@ struct PistonResponse {
 struct PistonRunResult {
     stdout: String,
     stderr: String,
-    output: String,
     code: Option<i32>,
-    signal: Option<String>,
 }
 
 /// Async test runner using Piston API
@@ -721,7 +719,7 @@ console.log(JSON.stringify(results));
     )
 }
 
-fn generate_go_harness(user_code: &str, test_cases: &[serde_json::Value], problem_id: usize) -> String {
+fn generate_go_harness(user_code: &str, test_cases: &[serde_json::Value], _problem_id: usize) -> String {
     // Serialize test cases
     let test_cases_str = serde_json::to_string(test_cases).unwrap_or_default();
     
@@ -885,7 +883,7 @@ func main() {{
     )
 }
 
-fn generate_java_harness(user_code: &str, test_cases: &[serde_json::Value], problem_id: usize) -> String {
+fn generate_java_harness(user_code: &str, test_cases: &[serde_json::Value], _problem_id: usize) -> String {
     // Process user code: strip imports and ensure proper structure
     let user_code_clean = user_code.lines()
         .filter(|line| !line.trim().starts_with("import ") && !line.trim().starts_with("package "))
@@ -904,7 +902,7 @@ fn generate_java_harness(user_code: &str, test_cases: &[serde_json::Value], prob
     
     // Generate test case initialization code based on problem structure
     let mut test_init = String::new();
-    for (idx, tc) in test_cases.iter().enumerate() {
+    for (_idx, tc) in test_cases.iter().enumerate() {
         if tc.get("nums").is_some() {
             let nums = tc["nums"].as_str().unwrap_or("[]");
             let target = tc["target"].as_str().unwrap_or("0");
@@ -1051,7 +1049,7 @@ public class Main {{
     )
 }
 
-fn generate_rust_harness(user_code: &str, test_cases: &[serde_json::Value], problem_id: usize) -> String {
+fn generate_rust_harness(user_code: &str, test_cases: &[serde_json::Value], _problem_id: usize) -> String {
     // Generate test case execution code based on problem structure
     let mut test_execution = String::new();
     
