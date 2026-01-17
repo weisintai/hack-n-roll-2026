@@ -48,6 +48,155 @@ pub struct OutputLine {
     pub is_error: bool,
 }
 
+/// Generate ASCII art for a language name
+fn get_language_ascii(lang: &str) -> Vec<&'static str> {
+    match lang {
+        "Python" => vec![
+            r"",
+            r"  ########  ##    ## ######## ##     ##  #######  ##    ## ",
+            r"  ##     ##  ##  ##     ##    ##     ## ##     ## ###   ## ",
+            r"  ##     ##   ####      ##    ##     ## ##     ## ####  ## ",
+            r"  ########     ##       ##    ######### ##     ## ## ## ## ",
+            r"  ##           ##       ##    ##     ## ##     ## ##  #### ",
+            r"  ##           ##       ##    ##     ## ##     ## ##   ### ",
+            r"  ##           ##       ##    ##     ##  #######  ##    ## ",
+            r"",
+        ],
+        "JavaScript" => vec![
+            r"",
+            r"       ##    ###    ##     ##    ###     ######   ######  ########  #### ########  ######## ",
+            r"       ##   ## ##   ##     ##   ## ##   ##    ## ##    ## ##     ##  ##  ##     ##    ##    ",
+            r"       ##  ##   ##  ##     ##  ##   ##  ##       ##       ##     ##  ##  ##     ##    ##    ",
+            r"       ## ##     ## ##     ## ##     ##  ######  ##       ########   ##  ########     ##    ",
+            r" ##    ## #########  ##   ##  #########       ## ##       ##   ##    ##  ##           ##    ",
+            r" ##    ## ##     ##   ## ##   ##     ## ##    ## ##    ## ##    ##   ##  ##           ##    ",
+            r"  ######  ##     ##    ###    ##     ##  ######   ######  ##     ## #### ##           ##    ",
+            r"",
+        ],
+        "TypeScript" => vec![
+            r"",
+            r"  ######## ##    ## ########  ########  ######   ######  ########  #### ########  ######## ",
+            r"     ##     ##  ##  ##     ## ##       ##    ## ##    ## ##     ##  ##  ##     ##    ##    ",
+            r"     ##      ####   ##     ## ##       ##       ##       ##     ##  ##  ##     ##    ##    ",
+            r"     ##       ##    ########  ######    ######  ##       ########   ##  ########     ##    ",
+            r"     ##       ##    ##        ##             ## ##       ##   ##    ##  ##           ##    ",
+            r"     ##       ##    ##        ##       ##    ## ##    ## ##    ##   ##  ##           ##    ",
+            r"     ##       ##    ##        ########  ######   ######  ##     ## #### ##           ##    ",
+            r"",
+        ],
+        "Rust" => vec![
+            r"",
+            r"  ########  ##     ##  ######  ######## ",
+            r"  ##     ## ##     ## ##    ##    ##    ",
+            r"  ##     ## ##     ## ##          ##    ",
+            r"  ########  ##     ##  ######     ##    ",
+            r"  ##   ##   ##     ##       ##    ##    ",
+            r"  ##    ##  ##     ## ##    ##    ##    ",
+            r"  ##     ##  #######   ######     ##    ",
+            r"",
+        ],
+        "Go" => vec![
+            r"",
+            r"   ######    #######  ",
+            r"  ##    ##  ##     ## ",
+            r"  ##        ##     ## ",
+            r"  ##   #### ##     ## ",
+            r"  ##    ##  ##     ## ",
+            r"  ##    ##  ##     ## ",
+            r"   ######    #######  ",
+            r"",
+        ],
+        "Java" => vec![
+            r"",
+            r"       ##    ###    ##     ##    ###    ",
+            r"       ##   ## ##   ##     ##   ## ##   ",
+            r"       ##  ##   ##  ##     ##  ##   ##  ",
+            r"       ## ##     ## ##     ## ##     ## ",
+            r" ##    ## #########  ##   ##  ######### ",
+            r" ##    ## ##     ##   ## ##   ##     ## ",
+            r"  ######  ##     ##    ###    ##     ## ",
+            r"",
+        ],
+        "Haskell" => vec![
+            r"",
+            r"  ##     ##    ###     ######  ##    ## ######## ##       ##       ",
+            r"  ##     ##   ## ##   ##    ## ##   ##  ##       ##       ##       ",
+            r"  ##     ##  ##   ##  ##       ##  ##   ##       ##       ##       ",
+            r"  ######### ##     ##  ######  #####    ######   ##       ##       ",
+            r"  ##     ## #########       ## ##  ##   ##       ##       ##       ",
+            r"  ##     ## ##     ## ##    ## ##   ##  ##       ##       ##       ",
+            r"  ##     ## ##     ##  ######  ##    ## ######## ######## ######## ",
+            r"",
+        ],
+        "Lua" => vec![
+            r"",
+            r"  ##       ##     ##    ###    ",
+            r"  ##       ##     ##   ## ##   ",
+            r"  ##       ##     ##  ##   ##  ",
+            r"  ##       ##     ## ##     ## ",
+            r"  ##       ##     ## ######### ",
+            r"  ##       ##     ## ##     ## ",
+            r"  ########  #######  ##     ## ",
+            r"",
+        ],
+        "OCaml" => vec![
+            r"",
+            r"   #######   ######     ###    ##     ## ##       ",
+            r"  ##     ## ##    ##   ## ##   ###   ### ##       ",
+            r"  ##     ## ##        ##   ##  #### #### ##       ",
+            r"  ##     ## ##       ##     ## ## ### ## ##       ",
+            r"  ##     ## ##       ######### ##     ## ##       ",
+            r"  ##     ## ##    ## ##     ## ##     ## ##       ",
+            r"   #######   ######  ##     ## ##     ## ######## ",
+            r"",
+        ],
+        "Elixir" => vec![
+            r"",
+            r"  ######## ##       #### ##     ## #### ########  ",
+            r"  ##       ##        ##   ##   ##   ##  ##     ## ",
+            r"  ##       ##        ##    ## ##    ##  ##     ## ",
+            r"  ######   ##        ##     ###     ##  ########  ",
+            r"  ##       ##        ##    ## ##    ##  ##   ##   ",
+            r"  ##       ##        ##   ##   ##   ##  ##    ##  ",
+            r"  ######## ######## #### ##     ## #### ##     ## ",
+            r"",
+        ],
+        "Kotlin" => vec![
+            r"",
+            r"  ##    ##  #######  ######## ##       #### ##    ## ",
+            r"  ##   ##  ##     ##    ##    ##        ##  ###   ## ",
+            r"  ##  ##   ##     ##    ##    ##        ##  ####  ## ",
+            r"  #####    ##     ##    ##    ##        ##  ## ## ## ",
+            r"  ##  ##   ##     ##    ##    ##        ##  ##  #### ",
+            r"  ##   ##  ##     ##    ##    ##        ##  ##   ### ",
+            r"  ##    ##  #######     ##    ######## #### ##    ## ",
+            r"",
+        ],
+        "Swift" => vec![
+            r"",
+            r"   ######  ##      ## #### ######## ######## ",
+            r"  ##    ## ##  ##  ##  ##  ##          ##    ",
+            r"  ##       ##  ##  ##  ##  ##          ##    ",
+            r"   ######  ##  ##  ##  ##  ######      ##    ",
+            r"        ## ##  ##  ##  ##  ##          ##    ",
+            r"  ##    ## ##  ##  ##  ##  ##          ##    ",
+            r"   ######   ###  ###  #### ##          ##    ",
+            r"",
+        ],
+        _ => vec![
+            r"",
+            r"  ##     ## ##    ## ##    ## ##    ##  #######  ##      ## ##    ## ",
+            r"  ##     ## ###   ## ##   ##  ###   ## ##     ## ##  ##  ## ###   ## ",
+            r"  ##     ## ####  ## ##  ##   ####  ## ##     ## ##  ##  ## ####  ## ",
+            r"  ##     ## ## ## ## #####    ## ## ## ##     ## ##  ##  ## ## ## ## ",
+            r"  ##     ## ##  #### ##  ##   ##  #### ##     ## ##  ##  ## ##  #### ",
+            r"  ##     ## ##   ### ##   ##  ##   ### ##     ## ##  ##  ## ##   ### ",
+            r"   #######  ##    ## ##    ## ##    ##  #######   ###  ###  ##    ## ",
+            r"",
+        ],
+    }
+}
+
 /// Generate starter code template for a problem in a specific language
 fn get_starter_code(problem: &Problem, language: Language) -> String {
     let func_name = &problem.function_name;
@@ -305,9 +454,9 @@ impl App {
                         if self.translation_ready() {
                             self.complete_transition();
                         } else {
-                            // Keep the reveal animation looping until translation finishes
-                            self.transition_start = Some(Instant::now());
-                            self.state = AppState::Revealing(0.0);
+                            // Keep showing the final reveal (don't restart animation)
+                            // Just stay at progress 0.99 to show the language while waiting
+                            self.state = AppState::Revealing(0.99);
                         }
                     } else {
                         self.state = AppState::Revealing(new_progress);
@@ -1521,91 +1670,127 @@ impl App {
             .map(|l| l.display_name())
             .unwrap_or("???");
         
-        let mut lines = vec![];
+        // Create glitch effect background (same as transition)
+        let glitch_chars = ["█", "▓", "▒", "░", "▄", "▀", "▌", "▐"];
+        let mut bg_lines = Vec::new();
+        let char_idx = (self.glitch_frame % glitch_chars.len()) as usize;
         
-        // Add top padding
-        for _ in 0..(size.height / 4) {
-            lines.push(Line::from(""));
+        let height = size.height as usize;
+        let width = size.width as usize;
+        
+        // Use a decreasing glitch intensity as reveal progresses
+        let glitch_intensity = 0.8 - (progress * 0.5);
+        
+        for i in 0..height {
+            let intensity = ((i as f32 / height as f32) - 0.5).abs();
+            let color = if intensity < 0.1 {
+                Color::Cyan
+            } else if intensity < 0.3 {
+                Color::Magenta
+            } else {
+                Color::Blue
+            };
+            
+            let mut line_text = String::new();
+            for _ in 0..width {
+                if rand::random::<f32>() < glitch_intensity {
+                    line_text.push_str(glitch_chars[char_idx]);
+                } else {
+                    line_text.push(' ');
+                }
+            }
+            
+            bg_lines.push(Line::from(Span::styled(line_text, Style::default().fg(color))));
         }
+        
+        let bg = Paragraph::new(bg_lines);
+        frame.render_widget(bg, size);
+        
+        // Build the overlay content
+        let mut message = vec![];
         
         // Spinning/slot machine effect for first part of reveal
         if progress < 0.5 {
             // Slot machine spinning effect for language only
             let languages = Language::all();
-            let spin_idx = ((progress * 20.0) as usize) % languages.len();
+            let spin_idx = ((progress * 30.0) as usize) % languages.len();
             let display_lang = languages[spin_idx].display_name();
             
-            lines.push(Line::from(Span::styled(
-                "╔════════════════════════════════════════╗",
+            message.push(Line::from(Span::styled(
+                "╔══════════════════════════════════════════════════════════════════╗",
                 Style::default().fg(Color::Cyan)
             )));
-            lines.push(Line::from(Span::styled(
-                "║     🎰 LANGUAGE ROULETTE... 🎰        ║",
+            message.push(Line::from(Span::styled(
+                "║              🎰 LANGUAGE ROULETTE... 🎰                          ║",
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
             )));
-            lines.push(Line::from(Span::styled(
-                "╠════════════════════════════════════════╣",
+            message.push(Line::from(Span::styled(
+                "╚══════════════════════════════════════════════════════════════════╝",
                 Style::default().fg(Color::Cyan)
             )));
-            lines.push(Line::from(""));
-            lines.push(Line::from(vec![
-                Span::styled("  LANGUAGE: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                Span::styled(format!("[ {} ]", display_lang), Style::default().fg(Color::Magenta).add_modifier(Modifier::RAPID_BLINK)),
-            ]));
-            lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled(
-                "╚════════════════════════════════════════╝",
-                Style::default().fg(Color::Cyan)
-            )));
+            message.push(Line::from(""));
+            
+            // Big ASCII display of spinning language
+            let ascii_art = get_language_ascii(display_lang);
+            for line in ascii_art {
+                message.push(Line::from(Span::styled(
+                    line,
+                    Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)
+                )));
+            }
         } else {
             // Final reveal with dramatic pause
             let reveal_progress = (progress - 0.5) * 2.0; // 0.0 to 1.0 for second half
             
-            lines.push(Line::from(Span::styled(
-                "╔════════════════════════════════════════╗",
+            message.push(Line::from(Span::styled(
+                "╔══════════════════════════════════════════════════════════════════╗",
                 Style::default().fg(Color::Green)
             )));
-            lines.push(Line::from(Span::styled(
-                "║       🎯 YOUR NEW LANGUAGE! 🎯        ║",
+            message.push(Line::from(Span::styled(
+                "║              🎯 YOUR NEW LANGUAGE! 🎯                            ║",
                 Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
             )));
-            lines.push(Line::from(Span::styled(
-                "╠════════════════════════════════════════╣",
+            message.push(Line::from(Span::styled(
+                "╚══════════════════════════════════════════════════════════════════╝",
                 Style::default().fg(Color::Green)
             )));
-            lines.push(Line::from(""));
+            message.push(Line::from(""));
             
-            // Show language with dramatic effect
+            // Show language with dramatic effect - BIG ASCII ART
             if reveal_progress > 0.3 {
-                lines.push(Line::from(vec![
-                    Span::styled("  LANGUAGE: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!(">>> {} <<<", lang_name), Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-                ]));
+                let ascii_art = get_language_ascii(lang_name);
+                for line in ascii_art {
+                    message.push(Line::from(Span::styled(
+                        line,
+                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                    )));
+                }
             } else {
-                lines.push(Line::from(vec![
-                    Span::styled("  LANGUAGE: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                    Span::styled("[ ??? ]", Style::default().fg(Color::DarkGray)),
-                ]));
+                message.push(Line::from(Span::styled(
+                    "   ???",
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
+                )));
             }
-            lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled(
-                "╚════════════════════════════════════════╝",
-                Style::default().fg(Color::Green)
-            )));
             
             if reveal_progress > 0.8 {
-                lines.push(Line::from(""));
-                lines.push(Line::from(Span::styled(
+                message.push(Line::from(""));
+                message.push(Line::from(Span::styled(
                     "🚀 GET READY TO CODE! 🚀",
                     Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
                 )));
             }
         }
         
-        let paragraph = Paragraph::new(lines)
-            .alignment(Alignment::Center);
-
-        frame.render_widget(paragraph, size);
+        // Render popup with black background for readability
+        let popup_area = centered_rect(75, 50, size);
+        let popup = Paragraph::new(message)
+            .alignment(Alignment::Center)
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Green))
+                .style(Style::default().bg(Color::Black)));
+        
+        frame.render_widget(popup, popup_area);
     }
 
     fn render_transition(&self, frame: &mut Frame, _progress: f32) {
@@ -1616,7 +1801,7 @@ impl App {
             0.0
         };
         
-        // Create glitch effect
+        // Create glitch effect background
         let glitch_chars = ["█", "▓", "▒", "░", "▄", "▀", "▌", "▐"];
         let mut lines = Vec::new();
         let char_idx = (self.glitch_frame % glitch_chars.len()) as usize;
@@ -1646,25 +1831,55 @@ impl App {
             lines.push(Line::from(Span::styled(line_text, Style::default().fg(color))));
         }
         
-        // Overlay transition message
-        let message = vec![
-            Line::from(""),
-            Line::from(Span::styled("▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓", Style::default().fg(Color::Cyan))),
-            Line::from(""),
-            Line::from(Span::styled("   RANDOMIZING CODE...   ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
-            Line::from(""),
-            Line::from(Span::styled(format!("   PROGRESS: {}%   ", (progress * 100.0) as u8), Style::default().fg(Color::White))),
-            Line::from(""),
-            Line::from(Span::styled("▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓", Style::default().fg(Color::Cyan))),
-        ];
-        
         let bg = Paragraph::new(lines);
         frame.render_widget(bg, size);
         
-        let popup_area = centered_rect(30, 20, size);
+        // Overlay language roulette on top of glitch effect
+        let languages = Language::all();
+        let spin_idx = ((progress * 30.0) as usize) % languages.len();
+        let display_lang = languages[spin_idx].display_name();
+        
+        // Get ASCII art for the spinning language
+        let ascii_art = get_language_ascii(display_lang);
+        
+        // Build the overlay message with ASCII art
+        let mut message = vec![
+            Line::from(Span::styled(
+                "╔══════════════════════════════════════════════════════════════════╗",
+                Style::default().fg(Color::Cyan)
+            )),
+            Line::from(Span::styled(
+                "║              🎰 LANGUAGE ROULETTE... 🎰                          ║",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            )),
+            Line::from(Span::styled(
+                "╚══════════════════════════════════════════════════════════════════╝",
+                Style::default().fg(Color::Cyan)
+            )),
+            Line::from(""),
+        ];
+        
+        // Add ASCII art lines
+        for line in ascii_art {
+            message.push(Line::from(Span::styled(
+                line,
+                Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)
+            )));
+        }
+        
+        message.push(Line::from(""));
+        message.push(Line::from(Span::styled(
+            format!("   TRANSLATING: {}%   ", (progress * 100.0) as u8),
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+        )));
+        
+        let popup_area = centered_rect(75, 50, size);
         let popup = Paragraph::new(message)
             .alignment(Alignment::Center)
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Cyan)));
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan))
+                .style(Style::default().bg(Color::Black)));
         
         frame.render_widget(popup, popup_area);
     }
