@@ -8,3 +8,6 @@
 
 # Environment
 .env*
+
+# Logs
+piston_full.log

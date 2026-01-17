@@ -340,9 +340,7 @@ struct PistonResponse {
 struct PistonRunResult {
     stdout: String,
     stderr: String,
-    output: String,
     code: Option<i32>,
-    signal: Option<String>,
 }
 
 /// Async test runner using Piston API
@@ -512,7 +510,6 @@ pub async fn run_tests_on_piston(
     }
 }
 
-
 fn generate_python_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
     format!(
         r#"
@@ -528,34 +525,75 @@ test_cases = {}
 results = []
 for i, tc in enumerate(test_cases):
     try:
-        # Piston might receive string inputs differently, handle eval carefully
-        nums = eval(tc["nums"]) if isinstance(tc["nums"], str) else tc["nums"]
-        target = int(tc["target"])
-        expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
-        
         actual = None
-        # Try finding solution function
-        if 'two_sum' in dir():
-            actual = two_sum(nums, target)
-        elif 'twoSum' in dir():
-             actual = twoSum(nums, target)
-        else:
-            # Fallback search
-             for name in dir():
-                if name.startswith('_'): continue
-                obj = eval(name)
-                if callable(obj):
-                     try:
-                        actual = obj(nums, target)
-                        break
-                     except:
-                        continue
+        expected = None
+        
+        # Dynamically handle different problem types
+        if "nums" in tc and "target" in tc:
+            # Two Sum (problem 1)
+            nums = eval(tc["nums"]) if isinstance(tc["nums"], str) else tc["nums"]
+            target = int(tc["target"])
+            expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
+            
+            # Try finding solution function
+            if 'two_sum' in dir():
+                actual = two_sum(nums, target)
+            elif 'twoSum' in dir():
+                actual = twoSum(nums, target)
+        
+        elif "s" in tc:
+            # String problems (problem 2 or 4)
+            s_input = eval(tc["s"]) if isinstance(tc["s"], str) else tc["s"]
+            expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
+            
+            if isinstance(s_input, list):
+                # Reverse String (problem 2) - modifies in place OR returns result
+                s_copy = s_input.copy()
+                if 'reverse_string' in dir():
+                    result = reverse_string(s_copy)
+                    actual = result if result is not None else s_copy
+                elif 'reverseString' in dir():
+                    result = reverseString(s_copy)
+                    actual = result if result is not None else s_copy
+            else:
+                # Palindrome check (problem 4)
+                if 'is_palindrome' in dir():
+                    actual = is_palindrome(s_input)
+                elif 'isPalindrome' in dir():
+                    actual = isPalindrome(s_input)
+        
+        elif "n" in tc:
+            # Number problems (problem 3 or 5)
+            n = int(tc["n"])
+            expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
+            
+            if isinstance(expected, list):
+                # Fizz Buzz (problem 3)
+                if 'fizz_buzz' in dir():
+                    actual = fizz_buzz(n)
+                elif 'fizzBuzz' in dir():
+                    actual = fizzBuzz(n)
+            else:
+                # Fibonacci (problem 5)
+                if 'fibonacci' in dir():
+                    actual = fibonacci(n)
+                elif 'fib' in dir():
+                    actual = fib(n)
         
         if actual is None:
             results.append({{"passed": False, "actual": "Error: No function found"}})
             continue
-            
-        passed = sorted(actual) == sorted(expected)
+        
+        # Compare results
+        if isinstance(actual, list) and isinstance(expected, list):
+            # For array results, sort before comparison if they're numeric
+            if len(actual) > 0 and isinstance(actual[0], (int, float)):
+                passed = sorted(actual) == sorted(expected)
+            else:
+                passed = actual == expected
+        else:
+            passed = actual == expected
+        
         results.append({{"passed": passed, "actual": str(actual)}})
     except Exception as e:
         results.append({{"passed": False, "actual": f"Error: {{e}}"}})
