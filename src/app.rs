@@ -1715,54 +1715,46 @@ impl App {
         main_text.push(Line::from(""));
         main_text.push(Line::from(""));
         
-        // Percentage in mega size
-        let digit_100 = self.get_ascii_number((score_percent / 100) % 10);
-        let digit_10 = self.get_ascii_number((score_percent / 10) % 10);
-        let digit_1 = self.get_ascii_number(score_percent % 10);
+        // Percentage in mega size - only show necessary digits
         let percent_symbol = self.get_ascii_percent();
         
-        main_text.push(Line::from(vec![
-            Span::styled(&digit_100[0], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_10[0], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_1[0], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&percent_symbol[0], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-        ]));
-        main_text.push(Line::from(vec![
-            Span::styled(&digit_100[1], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_10[1], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_1[1], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&percent_symbol[1], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-        ]));
-        main_text.push(Line::from(vec![
-            Span::styled(&digit_100[2], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_10[2], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_1[2], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&percent_symbol[2], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-        ]));
-        main_text.push(Line::from(vec![
-            Span::styled(&digit_100[3], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_10[3], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_1[3], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&percent_symbol[3], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-        ]));
-        main_text.push(Line::from(vec![
-            Span::styled(&digit_100[4], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_10[4], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_1[4], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&percent_symbol[4], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-        ]));
-        main_text.push(Line::from(vec![
-            Span::styled(&digit_100[5], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_10[5], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_1[5], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&percent_symbol[5], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-        ]));
-        main_text.push(Line::from(vec![
-            Span::styled(&digit_100[6], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_10[6], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&digit_1[6], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-            Span::styled(&percent_symbol[6], Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
-        ]));
+        if score_percent == 100 {
+            // Show all three digits for 100%
+            let digit_100 = self.get_ascii_number(1);
+            let digit_10 = self.get_ascii_number(0);
+            let digit_1 = self.get_ascii_number(0);
+            
+            for i in 0..7 {
+                main_text.push(Line::from(vec![
+                    Span::styled(digit_100[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(digit_10[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(digit_1[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(percent_symbol[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                ]));
+            }
+        } else if score_percent >= 10 {
+            // Show two digits for 10-99%
+            let digit_10 = self.get_ascii_number((score_percent / 10) % 10);
+            let digit_1 = self.get_ascii_number(score_percent % 10);
+            
+            for i in 0..7 {
+                main_text.push(Line::from(vec![
+                    Span::styled(digit_10[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(digit_1[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(percent_symbol[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                ]));
+            }
+        } else {
+            // Show one digit for 0-9%
+            let digit_1 = self.get_ascii_number(score_percent % 10);
+            
+            for i in 0..7 {
+                main_text.push(Line::from(vec![
+                    Span::styled(digit_1[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(percent_symbol[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                ]));
+            }
+        }
 
         main_text.push(Line::from(""));
         main_text.push(Line::from(""));
@@ -1791,13 +1783,6 @@ impl App {
         // Scoreboard area
         let mut scoreboard_text = vec![
             Line::from(""),
-            Line::from(Span::styled("██████╗ ███████╗███████╗", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-            Line::from(Span::styled("██╔══██╗██╔════╝██╔════╝", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-            Line::from(Span::styled("██████╔╝█████╗  ███████╗", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-            Line::from(Span::styled("██╔══██╗██╔══╝  ╚════██║", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-            Line::from(Span::styled("██║  ██║███████╗███████║", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-            Line::from(Span::styled("╚═╝  ╚═╝╚══════╝╚══════╝", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-            Line::from(""),
         ];
 
         for result in &results.details {
@@ -1805,35 +1790,35 @@ impl App {
             let status_color = if result.passed { Color::Green } else { Color::Red };
             
             scoreboard_text.push(Line::from(vec![
-                Span::styled("    ", Style::default()),
+                Span::styled("  ", Style::default()),
                 Span::styled(status_symbol, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
                 Span::styled(format!(" Test #{}", result.case_number), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             ]));
             
             // Compact display - use owned String
-            let input_display = if result.input.len() > 28 {
-                format!("{}...", &result.input[..25])
+            let input_display = if result.input.len() > 30 {
+                format!("{}...", &result.input[..27])
             } else {
                 result.input.clone()
             };
             
             scoreboard_text.push(Line::from(vec![
-                Span::styled("    In: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("  In: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(input_display, Style::default().fg(Color::Gray)),
             ]));
             
             if result.passed {
                 scoreboard_text.push(Line::from(vec![
-                    Span::styled("    ✓  ", Style::default().fg(Color::Green)),
+                    Span::styled("  ✓  ", Style::default().fg(Color::Green)),
                     Span::styled(result.expected.clone(), Style::default().fg(Color::Green)),
                 ]));
             } else {
                 scoreboard_text.push(Line::from(vec![
-                    Span::styled("    Expected: ", Style::default().fg(Color::Cyan)),
+                    Span::styled("  Expected: ", Style::default().fg(Color::Cyan)),
                     Span::styled(result.expected.clone(), Style::default().fg(Color::White)),
                 ]));
                 scoreboard_text.push(Line::from(vec![
-                    Span::styled("    Got: ", Style::default().fg(Color::Red)),
+                    Span::styled("  Got: ", Style::default().fg(Color::Red)),
                     Span::styled(result.actual.clone(), Style::default().fg(Color::White)),
                 ]));
             }
@@ -1847,8 +1832,9 @@ impl App {
 
         let scoreboard_paragraph = Paragraph::new(scoreboard_text)
             .block(scoreboard_block)
-            .alignment(Alignment::Center)
-            .wrap(Wrap { trim: true });
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: false })
+            .scroll((0, 0));
 
         frame.render_widget(main_paragraph, main_layout[0]);
         frame.render_widget(scoreboard_paragraph, main_layout[1]);
