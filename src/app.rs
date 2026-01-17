@@ -497,6 +497,7 @@ pub struct App {
     pub pending_problem: Option<Problem>,
     pub translation_rx: Option<mpsc::Receiver<TranslationEvent>>,
     pub pending_translation: Option<TranslationEvent>,
+    pub code_sent_for_translation: Option<String>,
 }
 
 impl App {
@@ -526,6 +527,7 @@ impl App {
             pending_problem: None,
             translation_rx: None,
             pending_translation: None,
+            code_sent_for_translation: None,
         }
     }
 
@@ -705,6 +707,7 @@ impl App {
         };
 
         let code = self.code.clone();
+        self.code_sent_for_translation = Some(code.clone());
         let from = self.current_language;
         let to = target_language;
         if from == to {
@@ -731,15 +734,18 @@ impl App {
         self.state = AppState::Countdown(5);
         // Pre-select new language now so we can show it during reveal
         self.pending_language = Some(self.current_language.random_except());
-        // START TRANSLATION EARLY - during countdown instead of transition
-        // This gives us 5 extra seconds for the LLM to work
+        // Start translation early for faster response
         self.start_llm_translation();
     }
 
     fn start_transition(&mut self) {
         self.transition_start = Some(Instant::now());
         self.state = AppState::Transitioning(0.0);
-        // Translation already started during countdown
+        // If user typed during countdown, restart translation with latest code
+        let code_changed = self.code_sent_for_translation.as_ref() != Some(&self.code);
+        if code_changed {
+            self.start_llm_translation();
+        }
     }
 
     fn start_reveal(&mut self) {
