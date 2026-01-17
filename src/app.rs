@@ -1707,20 +1707,21 @@ impl App {
             _ => self.get_ascii_number(0),
         };
 
-        let popup_area = centered_rect(50, 28, size);
+        let popup_area = centered_rect(50, 36, size);
         let popup_height = popup_area.height as usize;
         
         // Calculate content height for vertical centering
         let title_lines = 1;  // Warning message
         let ascii_number_lines = 6;  // Big number (now 6 lines)
         let help_text_lines = 1;  // "Keep typing" message
-        let spacing = 3;  // Empty lines between sections
+        let spacing = 3;  // Empty lines between sections (extra padding)
         let total_content_height = title_lines + ascii_number_lines + help_text_lines + spacing;
         
         // Calculate vertical padding (accounting for borders)
         let available_height = popup_height.saturating_sub(2); // Subtract borders
         let vertical_padding = if available_height > total_content_height {
-            (available_height - total_content_height) / 2
+            // Add one extra top padding line so content sits slightly lower
+            (available_height - total_content_height) / 2 + 1
         } else {
             0
         };
@@ -1737,6 +1738,7 @@ impl App {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD | Modifier::SLOW_BLINK)
             )));
         countdown_text.push(Line::from(""));
+        countdown_text.push(Line::from(""));
         
         // Add the big number
         for line in big_number {
@@ -1746,6 +1748,7 @@ impl App {
             )));
         }
         
+        // Extra padding line to avoid clipping the bottom of ASCII art
         countdown_text.push(Line::from(""));
         countdown_text.push(Line::from(Span::styled(
             "Keep typing! Your code will be translated.",
