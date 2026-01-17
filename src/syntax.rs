@@ -21,18 +21,25 @@ impl SyntaxHighlighter {
         let keywords = [
             "def", "class", "if", "else", "elif", "for", "while", "return", "import",
             "from", "as", "try", "except", "finally", "with", "pass", "break", "continue",
-            "and", "or", "not", "in", "is", "lambda", "yield", "async", "await", "None",
-            "True", "False",
+            "and", "or", "not", "in", "is", "lambda", "yield", "async", "await", "raise",
+            "del", "global", "nonlocal", "assert",
         ];
+        let builtins = ["None", "True", "False", "self", "cls"];
+        let types = ["int", "str", "bool", "float", "list", "dict", "set", "tuple", "range", "len", "print"];
         
-        Self::tokenize_and_color(
+        Self::advanced_tokenize(
             line,
             &keywords,
+            &builtins,
+            &types,
             '#',
-            Color::Green,    // Keywords
-            Color::Gray,     // Comments
-            Color::Yellow,   // Strings
-            Color::Cyan,     // Numbers
+            Color::Rgb(197, 134, 192),  // Purple keywords (like VS Code)
+            Color::Rgb(78, 201, 176),   // Teal for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,                // Comments
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
         )
     }
 
@@ -41,18 +48,25 @@ impl SyntaxHighlighter {
             "function", "const", "let", "var", "if", "else", "for", "while", "return",
             "class", "new", "this", "super", "extends", "import", "export", "from",
             "async", "await", "try", "catch", "finally", "throw", "typeof", "instanceof",
-            "null", "undefined", "true", "false", "break", "continue", "switch", "case",
-            "default", "do",
+            "break", "continue", "switch", "case", "default", "do", "of", "in",
+            "static", "get", "set", "delete", "void", "yield",
         ];
+        let builtins = ["null", "undefined", "true", "false", "NaN", "Infinity"];
+        let types = ["Array", "Object", "String", "Number", "Boolean", "Symbol", "Promise", "Map", "Set"];
         
-        Self::tokenize_and_color(
+        Self::advanced_tokenize(
             line,
             &keywords,
+            &builtins,
+            &types,
             '/',
-            Color::Magenta,  // Keywords
-            Color::Gray,     // Comments
-            Color::Yellow,   // Strings
-            Color::Cyan,     // Numbers
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
         )
     }
 
@@ -61,19 +75,27 @@ impl SyntaxHighlighter {
             "function", "const", "let", "var", "if", "else", "for", "while", "return",
             "class", "new", "this", "super", "extends", "import", "export", "from",
             "async", "await", "try", "catch", "finally", "throw", "typeof", "instanceof",
-            "null", "undefined", "true", "false", "break", "continue", "switch", "case",
-            "default", "do", "interface", "type", "enum", "namespace", "public", "private",
-            "protected", "readonly", "static", "abstract",
+            "break", "continue", "switch", "case", "default", "do", "of", "in",
+            "interface", "type", "enum", "namespace", "public", "private",
+            "protected", "readonly", "static", "abstract", "implements", "as",
+            "declare", "module", "any", "unknown", "never",
         ];
+        let builtins = ["null", "undefined", "true", "false"];
+        let types = ["string", "number", "boolean", "void", "Array", "Promise", "Record", "Partial"];
         
-        Self::tokenize_and_color(
+        Self::advanced_tokenize(
             line,
             &keywords,
+            &builtins,
+            &types,
             '/',
-            Color::Blue,     // Keywords
-            Color::Gray,     // Comments
-            Color::Yellow,   // Strings
-            Color::Cyan,     // Numbers
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
         )
     }
 
@@ -81,19 +103,26 @@ impl SyntaxHighlighter {
         let keywords = [
             "fn", "let", "mut", "const", "static", "if", "else", "match", "loop", "while",
             "for", "return", "struct", "enum", "impl", "trait", "pub", "use", "mod", "crate",
-            "self", "super", "async", "await", "move", "ref", "true", "false", "Some", "None",
-            "Ok", "Err", "Vec", "HashMap", "String", "i32", "i64", "u32", "u64", "f32", "f64",
-            "bool", "char", "usize",
+            "self", "super", "async", "await", "move", "ref", "as", "where", "unsafe",
+            "extern", "type", "dyn", "box", "break", "continue",
         ];
+        let builtins = ["true", "false", "Some", "None", "Ok", "Err"];
+        let types = ["Vec", "HashMap", "String", "str", "i32", "i64", "u32", "u64", "f32", "f64",
+                    "bool", "char", "usize", "isize", "Option", "Result"];
         
-        Self::tokenize_and_color(
+        Self::advanced_tokenize(
             line,
             &keywords,
+            &builtins,
+            &types,
             '/',
-            Color::LightRed,   // Keywords
-            Color::Gray,       // Comments
-            Color::Yellow,     // Strings
-            Color::Cyan,       // Numbers
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
         )
     }
 
@@ -101,59 +130,84 @@ impl SyntaxHighlighter {
         let keywords = [
             "func", "var", "const", "if", "else", "for", "range", "return", "struct",
             "interface", "type", "package", "import", "go", "defer", "chan", "select",
-            "case", "default", "break", "continue", "switch", "map", "make", "new",
-            "true", "false", "nil",
+            "case", "default", "break", "continue", "switch", "map", "fallthrough",
         ];
+        let builtins = ["true", "false", "nil", "iota"];
+        let types = ["int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64",
+                    "float32", "float64", "string", "bool", "byte", "rune", "error", "make", "new", "len", "cap"];
         
-        Self::tokenize_and_color(
+        Self::advanced_tokenize(
             line,
             &keywords,
+            &builtins,
+            &types,
             '/',
-            Color::LightCyan,  // Keywords
-            Color::Gray,       // Comments
-            Color::Yellow,     // Strings
-            Color::Cyan,       // Numbers
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
         )
     }
 
     fn highlight_java(line: &str) -> Vec<Span> {
         let keywords = [
             "public", "private", "protected", "class", "interface", "extends", "implements",
-            "new", "this", "super", "static", "final", "abstract", "void", "int", "long",
-            "double", "float", "boolean", "char", "String", "if", "else", "for", "while",
+            "new", "this", "super", "static", "final", "abstract", "void",
+            "if", "else", "for", "while", "do", "switch", "case", "default",
             "return", "try", "catch", "finally", "throw", "throws", "import", "package",
-            "true", "false", "null", "break", "continue", "switch", "case", "default",
+            "break", "continue", "synchronized", "volatile", "transient", "native",
+            "instanceof", "enum", "assert",
         ];
+        let builtins = ["true", "false", "null"];
+        let types = ["int", "long", "double", "float", "boolean", "char", "byte", "short",
+                    "String", "Integer", "Long", "Double", "Float", "Boolean", "Character",
+                    "List", "Map", "Set", "ArrayList", "HashMap", "HashSet", "Object"];
         
-        Self::tokenize_and_color(
+        Self::advanced_tokenize(
             line,
             &keywords,
+            &builtins,
+            &types,
             '/',
-            Color::LightMagenta, // Keywords
-            Color::Gray,         // Comments
-            Color::Yellow,       // Strings
-            Color::Cyan,         // Numbers
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
         )
     }
 
-    fn tokenize_and_color<'a>(
+    fn advanced_tokenize<'a>(
         line: &'a str,
         keywords: &[&str],
+        builtins: &[&str],
+        types: &[&str],
         comment_char: char,
         keyword_color: Color,
+        builtin_color: Color,
+        type_color: Color,
         comment_color: Color,
         string_color: Color,
         number_color: Color,
+        function_color: Color,
     ) -> Vec<Span<'a>> {
         let mut spans = Vec::new();
         
         // Check for comment first
         if let Some(comment_pos) = line.find(comment_char) {
-            // Handle double slash comments
             if comment_char == '/' && comment_pos + 1 < line.len() && line.chars().nth(comment_pos + 1) == Some('/') {
                 let before_comment = &line[..comment_pos];
                 if !before_comment.is_empty() {
-                    spans.extend(Self::colorize_code(before_comment, keywords, keyword_color, string_color, number_color));
+                    spans.extend(Self::colorize_advanced(
+                        before_comment, keywords, builtins, types,
+                        keyword_color, builtin_color, type_color,
+                        string_color, number_color, function_color
+                    ));
                 }
                 spans.push(Span::styled(
                     &line[comment_pos..],
@@ -163,7 +217,11 @@ impl SyntaxHighlighter {
             } else if comment_char == '#' {
                 let before_comment = &line[..comment_pos];
                 if !before_comment.is_empty() {
-                    spans.extend(Self::colorize_code(before_comment, keywords, keyword_color, string_color, number_color));
+                    spans.extend(Self::colorize_advanced(
+                        before_comment, keywords, builtins, types,
+                        keyword_color, builtin_color, type_color,
+                        string_color, number_color, function_color
+                    ));
                 }
                 spans.push(Span::styled(
                     &line[comment_pos..],
@@ -173,26 +231,39 @@ impl SyntaxHighlighter {
             }
         }
         
-        Self::colorize_code(line, keywords, keyword_color, string_color, number_color)
+        Self::colorize_advanced(
+            line, keywords, builtins, types,
+            keyword_color, builtin_color, type_color,
+            string_color, number_color, function_color
+        )
     }
 
-    fn colorize_code<'a>(
+    fn colorize_advanced<'a>(
         text: &'a str,
         keywords: &[&str],
+        builtins: &[&str],
+        types: &[&str],
         keyword_color: Color,
+        builtin_color: Color,
+        type_color: Color,
         string_color: Color,
         number_color: Color,
+        function_color: Color,
     ) -> Vec<Span<'a>> {
         let mut spans = Vec::new();
         let mut current_word = String::new();
         let mut in_string = false;
         let mut string_char = '\0';
         let mut string_content = String::new();
+        let chars: Vec<char> = text.chars().collect();
+        let mut i = 0;
         
-        for ch in text.chars() {
+        while i < chars.len() {
+            let ch = chars[i];
+            
             if in_string {
                 string_content.push(ch);
-                if ch == string_char && !string_content.ends_with(&format!("\\{}", string_char)) {
+                if ch == string_char && (i == 0 || chars[i - 1] != '\\') {
                     spans.push(Span::styled(
                         string_content.clone(),
                         Style::default().fg(string_color),
@@ -200,24 +271,41 @@ impl SyntaxHighlighter {
                     string_content.clear();
                     in_string = false;
                 }
-            } else if ch == '"' || ch == '\'' {
+            } else if ch == '"' || ch == '\'' || ch == '`' {
                 if !current_word.is_empty() {
-                    Self::push_word(&mut spans, &current_word, keywords, keyword_color, number_color);
+                    Self::push_advanced_word(
+                        &mut spans, &current_word, keywords, builtins, types,
+                        keyword_color, builtin_color, type_color, number_color, function_color,
+                        i < chars.len() - 1 && chars[i + 1] == '('
+                    );
                     current_word.clear();
                 }
                 in_string = true;
                 string_char = ch;
                 string_content.push(ch);
-            } else if ch.is_whitespace() || ch == '(' || ch == ')' || ch == '{' || ch == '}' 
-                   || ch == '[' || ch == ']' || ch == ',' || ch == ';' || ch == ':' || ch == '.' {
+            } else if ch.is_whitespace() || "(){}[],.;:+-*/%=<>!&|".contains(ch) {
                 if !current_word.is_empty() {
-                    Self::push_word(&mut spans, &current_word, keywords, keyword_color, number_color);
+                    let next_is_paren = i < chars.len() - 1 && chars[i + 1] == '(';
+                    Self::push_advanced_word(
+                        &mut spans, &current_word, keywords, builtins, types,
+                        keyword_color, builtin_color, type_color, number_color, function_color,
+                        next_is_paren
+                    );
                     current_word.clear();
                 }
-                spans.push(Span::styled(ch.to_string(), Style::default().fg(Color::White)));
+                
+                // Colorize operators
+                let operator_color = if "+-*/%=<>!&|".contains(ch) {
+                    Color::Rgb(212, 212, 212)  // Light gray for operators
+                } else {
+                    Color::White
+                };
+                spans.push(Span::styled(ch.to_string(), Style::default().fg(operator_color)));
             } else {
                 current_word.push(ch);
             }
+            
+            i += 1;
         }
         
         if in_string {
@@ -225,28 +313,58 @@ impl SyntaxHighlighter {
         }
         
         if !current_word.is_empty() {
-            Self::push_word(&mut spans, &current_word, keywords, keyword_color, number_color);
+            Self::push_advanced_word(
+                &mut spans, &current_word, keywords, builtins, types,
+                keyword_color, builtin_color, type_color, number_color, function_color,
+                false
+            );
         }
         
         spans
     }
 
-    fn push_word(
+    fn push_advanced_word(
         spans: &mut Vec<Span>,
         word: &str,
         keywords: &[&str],
+        builtins: &[&str],
+        types: &[&str],
         keyword_color: Color,
+        builtin_color: Color,
+        type_color: Color,
         number_color: Color,
+        function_color: Color,
+        next_is_paren: bool,
     ) {
         if keywords.contains(&word) {
             spans.push(Span::styled(
                 word.to_string(),
                 Style::default().fg(keyword_color).add_modifier(Modifier::BOLD),
             ));
-        } else if word.chars().all(|c| c.is_numeric() || c == '.') {
+        } else if builtins.contains(&word) {
+            spans.push(Span::styled(
+                word.to_string(),
+                Style::default().fg(builtin_color).add_modifier(Modifier::BOLD),
+            ));
+        } else if types.contains(&word) {
+            spans.push(Span::styled(
+                word.to_string(),
+                Style::default().fg(type_color),
+            ));
+        } else if next_is_paren {
+            // Function call
+            spans.push(Span::styled(
+                word.to_string(),
+                Style::default().fg(function_color),
+            ));
+        } else if word.chars().all(|c| c.is_numeric() || c == '.' || c == '_') && word.chars().any(|c| c.is_numeric()) {
             spans.push(Span::styled(word.to_string(), Style::default().fg(number_color)));
+        } else if word.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+            // Likely a class or type (capitalized)
+            spans.push(Span::styled(word.to_string(), Style::default().fg(type_color)));
         } else {
-            spans.push(Span::styled(word.to_string(), Style::default().fg(Color::White)));
+            spans.push(Span::styled(word.to_string(), Style::default().fg(Color::Rgb(212, 212, 212))));
         }
     }
 }
+
