@@ -1,11 +1,12 @@
 mod app;
 mod languages;
 mod problem;
+mod syntax;
 
 use anyhow::Result;
 use app::{App, AppState};
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, EnableMouseCapture, DisableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -18,7 +19,7 @@ async fn main() -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -30,7 +31,7 @@ async fn main() -> Result<()> {
 
     // Restore terminal
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
     terminal.show_cursor()?;
 
     if let Err(err) = result {
@@ -62,18 +63,29 @@ async fn run_app<B: ratatui::backend::Backend>(
 
         // Handle input
         if event::poll(timeout)? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    // Global quit
-                    if key.code == KeyCode::Esc && matches!(app.state, AppState::Results(_)) {
-                        return Ok(());
+            match event::read()? {
+                Event::Key(key) => {
+                    if key.kind == KeyEventKind::Press {
+                        // Global quit with Cmd+Q or Ctrl+Q
+                        if (key.modifiers.contains(KeyModifiers::SUPER) || key.modifiers.contains(KeyModifiers::CONTROL)) 
+                            && (key.code == KeyCode::Char('q') || key.code == KeyCode::Char('Q')) {
+                            return Ok(());
+                        }
+
+                        // Quit from results screen
+                        if matches!(app.state, AppState::Results(_)) {
+                            if key.code == KeyCode::Esc || key.code == KeyCode::Char('q') {
+                                return Ok(());
+                            }
+                        }
+                        
+                        app.handle_key(key);
                     }
-                    if key.code == KeyCode::Char('q') && matches!(app.state, AppState::Results(_)) {
-                        return Ok(());
-                    }
-                    
-                    app.handle_key(key);
                 }
+                Event::Mouse(mouse) => {
+                    app.handle_mouse(mouse);
+                }
+                _ => {}
             }
         }
 
