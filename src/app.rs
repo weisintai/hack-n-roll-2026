@@ -955,8 +955,14 @@ impl App {
     fn handle_results_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Enter | KeyCode::Char('r') => {
-                // Restart
-                *self = App::new();
+                // Restart with same problem and code - just go back to coding
+                self.state = AppState::Coding;
+                self.test_results = None;
+                self.execution_output.clear();
+                self.show_output_panel = false;
+                self.execution_progress = 0.0;
+                self.output_rx = None;
+                self.last_randomize = Instant::now(); // Reset timer
             }
             KeyCode::Esc | KeyCode::Char('q') => {
                 // Keep results visible, could add exit logic here
