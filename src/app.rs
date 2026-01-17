@@ -48,153 +48,273 @@ pub struct OutputLine {
     pub is_error: bool,
 }
 
-/// Generate ASCII art for a language name
-fn get_language_ascii(lang: &str) -> Vec<&'static str> {
-    match lang {
-        "Python" => vec![
-            r"",
-            r"  ########  ##    ## ######## ##     ##  #######  ##    ## ",
-            r"  ##     ##  ##  ##     ##    ##     ## ##     ## ###   ## ",
-            r"  ##     ##   ####      ##    ##     ## ##     ## ####  ## ",
-            r"  ########     ##       ##    ######### ##     ## ## ## ## ",
-            r"  ##           ##       ##    ##     ## ##     ## ##  #### ",
-            r"  ##           ##       ##    ##     ## ##     ## ##   ### ",
-            r"  ##           ##       ##    ##     ##  #######  ##    ## ",
-            r"",
+/// Generate box-drawing ASCII art for a single letter
+fn get_letter_ascii(letter: char) -> Vec<String> {
+    match letter.to_ascii_uppercase() {
+        'A' => vec![
+            " █████╗ ".to_string(),
+            "██╔══██╗".to_string(),
+            "███████║".to_string(),
+            "██╔══██║".to_string(),
+            "██║  ██║".to_string(),
+            "╚═╝  ╚═╝".to_string(),
         ],
-        "JavaScript" => vec![
-            r"",
-            r"       ##    ###    ##     ##    ###     ######   ######  ########  #### ########  ######## ",
-            r"       ##   ## ##   ##     ##   ## ##   ##    ## ##    ## ##     ##  ##  ##     ##    ##    ",
-            r"       ##  ##   ##  ##     ##  ##   ##  ##       ##       ##     ##  ##  ##     ##    ##    ",
-            r"       ## ##     ## ##     ## ##     ##  ######  ##       ########   ##  ########     ##    ",
-            r" ##    ## #########  ##   ##  #########       ## ##       ##   ##    ##  ##           ##    ",
-            r" ##    ## ##     ##   ## ##   ##     ## ##    ## ##    ## ##    ##   ##  ##           ##    ",
-            r"  ######  ##     ##    ###    ##     ##  ######   ######  ##     ## #### ##           ##    ",
-            r"",
+        'B' => vec![
+            "██████╗ ".to_string(),
+            "██╔══██╗".to_string(),
+            "██████╔╝".to_string(),
+            "██╔══██╗".to_string(),
+            "██████╔╝".to_string(),
+            "╚═════╝ ".to_string(),
         ],
-        "TypeScript" => vec![
-            r"",
-            r"  ######## ##    ## ########  ########  ######   ######  ########  #### ########  ######## ",
-            r"     ##     ##  ##  ##     ## ##       ##    ## ##    ## ##     ##  ##  ##     ##    ##    ",
-            r"     ##      ####   ##     ## ##       ##       ##       ##     ##  ##  ##     ##    ##    ",
-            r"     ##       ##    ########  ######    ######  ##       ########   ##  ########     ##    ",
-            r"     ##       ##    ##        ##             ## ##       ##   ##    ##  ##           ##    ",
-            r"     ##       ##    ##        ##       ##    ## ##    ## ##    ##   ##  ##           ##    ",
-            r"     ##       ##    ##        ########  ######   ######  ##     ## #### ##           ##    ",
-            r"",
+        'C' => vec![
+            " ██████╗".to_string(),
+            "██╔════╝".to_string(),
+            "██║     ".to_string(),
+            "██║     ".to_string(),
+            "╚██████╗".to_string(),
+            " ╚═════╝".to_string(),
         ],
-        "Rust" => vec![
-            r"",
-            r"  ########  ##     ##  ######  ######## ",
-            r"  ##     ## ##     ## ##    ##    ##    ",
-            r"  ##     ## ##     ## ##          ##    ",
-            r"  ########  ##     ##  ######     ##    ",
-            r"  ##   ##   ##     ##       ##    ##    ",
-            r"  ##    ##  ##     ## ##    ##    ##    ",
-            r"  ##     ##  #######   ######     ##    ",
-            r"",
+        'D' => vec![
+            "██████╗ ".to_string(),
+            "██╔══██╗".to_string(),
+            "██║  ██║".to_string(),
+            "██║  ██║".to_string(),
+            "██████╔╝".to_string(),
+            "╚═════╝ ".to_string(),
         ],
-        "Go" => vec![
-            r"",
-            r"   ######    #######  ",
-            r"  ##    ##  ##     ## ",
-            r"  ##        ##     ## ",
-            r"  ##   #### ##     ## ",
-            r"  ##    ##  ##     ## ",
-            r"  ##    ##  ##     ## ",
-            r"   ######    #######  ",
-            r"",
+        'E' => vec![
+            "███████╗".to_string(),
+            "██╔════╝".to_string(),
+            "█████╗  ".to_string(),
+            "██╔══╝  ".to_string(),
+            "███████╗".to_string(),
+            "╚══════╝".to_string(),
         ],
-        "Java" => vec![
-            r"",
-            r"       ##    ###    ##     ##    ###    ",
-            r"       ##   ## ##   ##     ##   ## ##   ",
-            r"       ##  ##   ##  ##     ##  ##   ##  ",
-            r"       ## ##     ## ##     ## ##     ## ",
-            r" ##    ## #########  ##   ##  ######### ",
-            r" ##    ## ##     ##   ## ##   ##     ## ",
-            r"  ######  ##     ##    ###    ##     ## ",
-            r"",
+        'F' => vec![
+            "███████╗".to_string(),
+            "██╔════╝".to_string(),
+            "█████╗  ".to_string(),
+            "██╔══╝  ".to_string(),
+            "██║     ".to_string(),
+            "╚═╝     ".to_string(),
         ],
-        "Haskell" => vec![
-            r"",
-            r"  ##     ##    ###     ######  ##    ## ######## ##       ##       ",
-            r"  ##     ##   ## ##   ##    ## ##   ##  ##       ##       ##       ",
-            r"  ##     ##  ##   ##  ##       ##  ##   ##       ##       ##       ",
-            r"  ######### ##     ##  ######  #####    ######   ##       ##       ",
-            r"  ##     ## #########       ## ##  ##   ##       ##       ##       ",
-            r"  ##     ## ##     ## ##    ## ##   ##  ##       ##       ##       ",
-            r"  ##     ## ##     ##  ######  ##    ## ######## ######## ######## ",
-            r"",
+        'G' => vec![
+            " ██████╗ ".to_string(),
+            "██╔════╝ ".to_string(),
+            "██║  ███╗".to_string(),
+            "██║   ██║".to_string(),
+            "╚██████╔╝".to_string(),
+            " ╚═════╝ ".to_string(),
         ],
-        "Lua" => vec![
-            r"",
-            r"  ##       ##     ##    ###    ",
-            r"  ##       ##     ##   ## ##   ",
-            r"  ##       ##     ##  ##   ##  ",
-            r"  ##       ##     ## ##     ## ",
-            r"  ##       ##     ## ######### ",
-            r"  ##       ##     ## ##     ## ",
-            r"  ########  #######  ##     ## ",
-            r"",
+        'H' => vec![
+            "██╗  ██╗".to_string(),
+            "██║  ██║".to_string(),
+            "███████║".to_string(),
+            "██╔══██║".to_string(),
+            "██║  ██║".to_string(),
+            "╚═╝  ╚═╝".to_string(),
         ],
-        "OCaml" => vec![
-            r"",
-            r"   #######   ######     ###    ##     ## ##       ",
-            r"  ##     ## ##    ##   ## ##   ###   ### ##       ",
-            r"  ##     ## ##        ##   ##  #### #### ##       ",
-            r"  ##     ## ##       ##     ## ## ### ## ##       ",
-            r"  ##     ## ##       ######### ##     ## ##       ",
-            r"  ##     ## ##    ## ##     ## ##     ## ##       ",
-            r"   #######   ######  ##     ## ##     ## ######## ",
-            r"",
+        'I' => vec![
+            "██╗".to_string(),
+            "██║".to_string(),
+            "██║".to_string(),
+            "██║".to_string(),
+            "██║".to_string(),
+            "╚═╝".to_string(),
         ],
-        "Elixir" => vec![
-            r"",
-            r"  ######## ##       #### ##     ## #### ########  ",
-            r"  ##       ##        ##   ##   ##   ##  ##     ## ",
-            r"  ##       ##        ##    ## ##    ##  ##     ## ",
-            r"  ######   ##        ##     ###     ##  ########  ",
-            r"  ##       ##        ##    ## ##    ##  ##   ##   ",
-            r"  ##       ##        ##   ##   ##   ##  ##    ##  ",
-            r"  ######## ######## #### ##     ## #### ##     ## ",
-            r"",
+        'J' => vec![
+            "     ██╗".to_string(),
+            "     ██║".to_string(),
+            "     ██║".to_string(),
+            "██   ██║".to_string(),
+            "╚█████╔╝".to_string(),
+            " ╚════╝ ".to_string(),
         ],
-        "Kotlin" => vec![
-            r"",
-            r"  ##    ##  #######  ######## ##       #### ##    ## ",
-            r"  ##   ##  ##     ##    ##    ##        ##  ###   ## ",
-            r"  ##  ##   ##     ##    ##    ##        ##  ####  ## ",
-            r"  #####    ##     ##    ##    ##        ##  ## ## ## ",
-            r"  ##  ##   ##     ##    ##    ##        ##  ##  #### ",
-            r"  ##   ##  ##     ##    ##    ##        ##  ##   ### ",
-            r"  ##    ##  #######     ##    ######## #### ##    ## ",
-            r"",
+        'K' => vec![
+            "██╗  ██╗".to_string(),
+            "██║ ██╔╝".to_string(),
+            "█████╔╝ ".to_string(),
+            "██╔═██╗ ".to_string(),
+            "██║  ██╗".to_string(),
+            "╚═╝  ╚═╝".to_string(),
         ],
-        "Swift" => vec![
-            r"",
-            r"   ######  ##      ## #### ######## ######## ",
-            r"  ##    ## ##  ##  ##  ##  ##          ##    ",
-            r"  ##       ##  ##  ##  ##  ##          ##    ",
-            r"   ######  ##  ##  ##  ##  ######      ##    ",
-            r"        ## ##  ##  ##  ##  ##          ##    ",
-            r"  ##    ## ##  ##  ##  ##  ##          ##    ",
-            r"   ######   ###  ###  #### ##          ##    ",
-            r"",
+        'L' => vec![
+            "██╗     ".to_string(),
+            "██║     ".to_string(),
+            "██║     ".to_string(),
+            "██║     ".to_string(),
+            "███████╗".to_string(),
+            "╚══════╝".to_string(),
+        ],
+        'M' => vec![
+            "███╗   ███╗".to_string(),
+            "████╗ ████║".to_string(),
+            "██╔████╔██║".to_string(),
+            "██║╚██╔╝██║".to_string(),
+            "██║ ╚═╝ ██║".to_string(),
+            "╚═╝     ╚═╝".to_string(),
+        ],
+        'N' => vec![
+            "███╗   ██╗".to_string(),
+            "████╗  ██║".to_string(),
+            "██╔██╗ ██║".to_string(),
+            "██║╚██╗██║".to_string(),
+            "██║ ╚████║".to_string(),
+            "╚═╝  ╚═══╝".to_string(),
+        ],
+        'O' => vec![
+            " ██████╗ ".to_string(),
+            "██╔═══██╗".to_string(),
+            "██║   ██║".to_string(),
+            "██║   ██║".to_string(),
+            "╚██████╔╝".to_string(),
+            " ╚═════╝ ".to_string(),
+        ],
+        'P' => vec![
+            "██████╗ ".to_string(),
+            "██╔══██╗".to_string(),
+            "██████╔╝".to_string(),
+            "██╔═══╝ ".to_string(),
+            "██║     ".to_string(),
+            "╚═╝     ".to_string(),
+        ],
+        'Q' => vec![
+            " ██████╗ ".to_string(),
+            "██╔═══██╗".to_string(),
+            "██║   ██║".to_string(),
+            "██║▄▄ ██║".to_string(),
+            "╚██████╔╝".to_string(),
+            " ╚══▀▀═╝ ".to_string(),
+        ],
+        'R' => vec![
+            "██████╗ ".to_string(),
+            "██╔══██╗".to_string(),
+            "██████╔╝".to_string(),
+            "██╔══██╗".to_string(),
+            "██║  ██║".to_string(),
+            "╚═╝  ╚═╝".to_string(),
+        ],
+        'S' => vec![
+            "███████╗".to_string(),
+            "██╔════╝".to_string(),
+            "███████╗".to_string(),
+            "╚════██║".to_string(),
+            "███████║".to_string(),
+            "╚══════╝".to_string(),
+        ],
+        'T' => vec![
+            "████████╗".to_string(),
+            "╚══██╔══╝".to_string(),
+            "   ██║   ".to_string(),
+            "   ██║   ".to_string(),
+            "   ██║   ".to_string(),
+            "   ╚═╝   ".to_string(),
+        ],
+        'U' => vec![
+            "██╗   ██╗".to_string(),
+            "██║   ██║".to_string(),
+            "██║   ██║".to_string(),
+            "██║   ██║".to_string(),
+            "╚██████╔╝".to_string(),
+            " ╚═════╝ ".to_string(),
+        ],
+        'V' => vec![
+            "██╗   ██╗".to_string(),
+            "██║   ██║".to_string(),
+            "██║   ██║".to_string(),
+            "╚██╗ ██╔╝".to_string(),
+            " ╚████╔╝ ".to_string(),
+            "  ╚═══╝  ".to_string(),
+        ],
+        'W' => vec![
+            "██╗    ██╗".to_string(),
+            "██║    ██║".to_string(),
+            "██║ █╗ ██║".to_string(),
+            "██║███╗██║".to_string(),
+            "╚███╔███╔╝".to_string(),
+            " ╚══╝╚══╝ ".to_string(),
+        ],
+        'X' => vec![
+            "██╗  ██╗".to_string(),
+            "╚██╗██╔╝".to_string(),
+            " ╚███╔╝ ".to_string(),
+            " ██╔██╗ ".to_string(),
+            "██╔╝ ██╗".to_string(),
+            "╚═╝  ╚═╝".to_string(),
+        ],
+        'Y' => vec![
+            "██╗   ██╗".to_string(),
+            "╚██╗ ██╔╝".to_string(),
+            " ╚████╔╝ ".to_string(),
+            "  ╚██╔╝  ".to_string(),
+            "   ██║   ".to_string(),
+            "   ╚═╝   ".to_string(),
+        ],
+        'Z' => vec![
+            "███████╗".to_string(),
+            "╚══███╔╝".to_string(),
+            "  ███╔╝ ".to_string(),
+            " ███╔╝  ".to_string(),
+            "███████╗".to_string(),
+            "═╚═════╝".to_string(),
+        ],
+        ' ' => vec![
+            "  ".to_string(),
+            "  ".to_string(),
+            "  ".to_string(),
+            "  ".to_string(),
+            "  ".to_string(),
+            "  ".to_string(),
+        ],
+        '?' => vec![
+            " ██████╗ ".to_string(),
+            "██╔═══██╗".to_string(),
+            "╚═══██╔╝ ".to_string(),
+            "   ██╔╝  ".to_string(),
+            "   ╚═╝   ".to_string(),
+            "   ██    ".to_string(),
         ],
         _ => vec![
-            r"",
-            r"  ##     ## ##    ## ##    ## ##    ##  #######  ##      ## ##    ## ",
-            r"  ##     ## ###   ## ##   ##  ###   ## ##     ## ##  ##  ## ###   ## ",
-            r"  ##     ## ####  ## ##  ##   ####  ## ##     ## ##  ##  ## ####  ## ",
-            r"  ##     ## ## ## ## #####    ## ## ## ##     ## ##  ##  ## ## ## ## ",
-            r"  ##     ## ##  #### ##  ##   ##  #### ##     ## ##  ##  ## ##  #### ",
-            r"  ##     ## ##   ### ##   ##  ##   ### ##     ## ##  ##  ## ##   ### ",
-            r"   #######  ##    ## ##    ## ##    ##  #######   ###  ###  ##    ## ",
-            r"",
+            "█╗  ".to_string(),
+            "█║  ".to_string(),
+            "█║  ".to_string(),
+            "█║  ".to_string(),
+            "█║  ".to_string(),
+            "╚╝  ".to_string(),
         ],
     }
+}
+
+/// Generate ASCII art for a text string by combining individual letters
+fn get_text_ascii(text: &str) -> Vec<String> {
+    let letters: Vec<Vec<String>> = text.chars().map(get_letter_ascii).collect();
+    
+    if letters.is_empty() {
+        return vec!["".to_string(); 6];
+    }
+    
+    let mut result = vec![String::new(); 6];
+    
+    for letter_art in letters {
+        for (i, line) in letter_art.iter().enumerate() {
+            if i < 6 {
+                result[i].push_str(line);
+            }
+        }
+    }
+    
+    result
+}
+
+/// Generate ASCII art for a language name using composed letters
+fn get_language_ascii(lang: &str) -> Vec<String> {
+    let ascii = get_text_ascii(lang);
+    // Add an empty line at the start for spacing
+    let mut result = vec!["".to_string()];
+    result.extend(ascii);
+    result.push("".to_string());
+    result
 }
 
 /// Generate starter code template for a problem in a specific language
@@ -1577,59 +1697,46 @@ impl App {
             _ => Color::White,
         };
 
-        // Big ASCII art numbers
+        // Big ASCII art numbers using the standardized function
         let big_number = match count {
-            5 => vec![
-                " ███████ ",
-                " ██      ",
-                " ███████ ",
-                "      ██ ",
-                " ███████ ",
-            ],
-            4 => vec![
-                " ██   ██ ",
-                " ██   ██ ",
-                " ███████ ",
-                "      ██ ",
-                "      ██ ",
-            ],
-            3 => vec![
-                " ███████ ",
-                "      ██ ",
-                " ███████ ",
-                "      ██ ",
-                " ███████ ",
-            ],
-            2 => vec![
-                " ███████ ",
-                "      ██ ",
-                " ███████ ",
-                " ██      ",
-                " ███████ ",
-            ],
-            1 => vec![
-                "    ██   ",
-                "   ███   ",
-                "    ██   ",
-                "    ██   ",
-                "   ████  ",
-            ],
-            _ => vec![
-                " ███████ ",
-                " ██   ██ ",
-                " ██   ██ ",
-                " ██   ██ ",
-                " ███████ ",
-            ],
+            5 => self.get_ascii_number(5),
+            4 => self.get_ascii_number(4),
+            3 => self.get_ascii_number(3),
+            2 => self.get_ascii_number(2),
+            1 => self.get_ascii_number(1),
+            _ => self.get_ascii_number(0),
         };
 
-        let mut countdown_text = vec![
-            Line::from(Span::styled(
-                "⚠️  LANGUAGE CHANGE INCOMING  ⚠️",
+        let popup_area = centered_rect(50, 28, size);
+        let popup_height = popup_area.height as usize;
+        
+        // Calculate content height for vertical centering
+        let title_lines = 1;  // Warning message
+        let ascii_number_lines = 6;  // Big number (now 6 lines)
+        let help_text_lines = 1;  // "Keep typing" message
+        let spacing = 3;  // Empty lines between sections
+        let total_content_height = title_lines + ascii_number_lines + help_text_lines + spacing;
+        
+        // Calculate vertical padding (accounting for borders)
+        let available_height = popup_height.saturating_sub(2); // Subtract borders
+        let vertical_padding = if available_height > total_content_height {
+            (available_height - total_content_height) / 2
+        } else {
+            0
+        };
+        
+        let mut countdown_text = vec![];
+        
+        // Add top padding for vertical centering
+        for _ in 0..vertical_padding {
+            countdown_text.push(Line::from(""));
+        }
+        
+        countdown_text.push(Line::from(Span::styled(
+                "YOUR CODE WILL BECOME A RANDOM LANGUAGE. DO NOT RESIST.",
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD | Modifier::SLOW_BLINK)
-            )),
-            Line::from(""),
-        ];
+            )));
+        countdown_text.push(Line::from(""));
         
         // Add the big number
         for line in big_number {
@@ -1644,8 +1751,6 @@ impl App {
             "Keep typing! Your code will be translated.",
             Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC)
         )));
-        
-        let popup_area = centered_rect(50, 28, size);
         
         // Clear the area for solid background
         frame.render_widget(Clear, popup_area);
@@ -1684,13 +1789,55 @@ impl App {
         
         for i in 0..height {
             let intensity = ((i as f32 / height as f32) - 0.5).abs();
-            let color = if intensity < 0.1 {
-                Color::Cyan
+            let wave = (i as f32 * 0.1 + progress * 10.0).sin();
+            let phase = (self.glitch_frame as f32 * 0.1 + i as f32 * 0.05).sin();
+            
+            // Generate random rainbow colors - full spectrum
+            let hue_base = (i as f32 * 7.0 + self.glitch_frame as f32 * 3.0) % 360.0;
+            let hue_offset = wave * 60.0 + phase * 40.0;
+            let hue = (hue_base + hue_offset).rem_euclid(360.0);
+            
+            // Vary saturation and brightness based on intensity
+            let saturation = if intensity < 0.1 {
+                0.9 + rand::random::<f32>() * 0.1  // Very saturated near progress
             } else if intensity < 0.3 {
-                Color::Magenta
+                0.6 + rand::random::<f32>() * 0.3  // Medium saturation
             } else {
-                Color::Blue
+                0.3 + rand::random::<f32>() * 0.4  // Lower saturation
             };
+            
+            let brightness = if intensity < 0.1 {
+                0.8 + rand::random::<f32>() * 0.2  // Bright near progress
+            } else if intensity < 0.3 {
+                0.5 + rand::random::<f32>() * 0.3  // Medium brightness
+            } else {
+                0.2 + rand::random::<f32>() * 0.3  // Dimmer background
+            };
+            
+            // Convert HSV to RGB
+            let c = brightness * saturation;
+            let x = c * (1.0 - ((hue / 60.0) % 2.0 - 1.0).abs());
+            let m = brightness - c;
+            
+            let (r, g, b) = if hue < 60.0 {
+                (c, x, 0.0)
+            } else if hue < 120.0 {
+                (x, c, 0.0)
+            } else if hue < 180.0 {
+                (0.0, c, x)
+            } else if hue < 240.0 {
+                (0.0, x, c)
+            } else if hue < 300.0 {
+                (x, 0.0, c)
+            } else {
+                (c, 0.0, x)
+            };
+            
+            let color = Color::Rgb(
+                ((r + m) * 255.0) as u8,
+                ((g + m) * 255.0) as u8,
+                ((b + m) * 255.0) as u8
+            );
             
             let mut line_text = String::new();
             for _ in 0..width {
@@ -1722,7 +1869,7 @@ impl App {
                 Style::default().fg(Color::Cyan)
             )));
             message.push(Line::from(Span::styled(
-                "║              🎰 LANGUAGE ROULETTE... 🎰                          ║",
+                "║           RNG IS SELECTING YOUR NEW LINGUA FRANCA...             ║",
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
             )));
             message.push(Line::from(Span::styled(
@@ -1733,10 +1880,40 @@ impl App {
             
             // Big ASCII display of spinning language
             let ascii_art = get_language_ascii(display_lang);
+            
+            // Generate random rainbow color for each frame
+            let hue = (self.glitch_frame as f32 * 17.0 + progress * 360.0) % 360.0;
+            let saturation = 0.8 + rand::random::<f32>() * 0.2;
+            let brightness = 0.7 + rand::random::<f32>() * 0.3;
+            
+            let c = brightness * saturation;
+            let x = c * (1.0 - ((hue / 60.0) % 2.0 - 1.0).abs());
+            let m = brightness - c;
+            
+            let (r, g, b) = if hue < 60.0 {
+                (c, x, 0.0)
+            } else if hue < 120.0 {
+                (x, c, 0.0)
+            } else if hue < 180.0 {
+                (0.0, c, x)
+            } else if hue < 240.0 {
+                (0.0, x, c)
+            } else if hue < 300.0 {
+                (x, 0.0, c)
+            } else {
+                (c, 0.0, x)
+            };
+            
+            let color = Color::Rgb(
+                ((r + m) * 255.0) as u8,
+                ((g + m) * 255.0) as u8,
+                ((b + m) * 255.0) as u8
+            );
+            
             for line in ascii_art {
                 message.push(Line::from(Span::styled(
                     line,
-                    Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)
+                    Style::default().fg(color).add_modifier(Modifier::BOLD)
                 )));
             }
         } else {
@@ -1748,7 +1925,7 @@ impl App {
                 Style::default().fg(Color::Green)
             )));
             message.push(Line::from(Span::styled(
-                "║              🎯 YOUR NEW LANGUAGE! 🎯                            ║",
+                "║                       YOUR NEW LANGUAGE!                         ║",
                 Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
             )));
             message.push(Line::from(Span::styled(
@@ -1767,16 +1944,20 @@ impl App {
                     )));
                 }
             } else {
-                message.push(Line::from(Span::styled(
-                    "   ???",
-                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
-                )));
+                // Show big ASCII question marks
+                let question_marks = get_text_ascii("? ? ?");
+                for line in question_marks {
+                    message.push(Line::from(Span::styled(
+                        line,
+                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                    )));
+                }
             }
             
             if reveal_progress > 0.8 {
                 message.push(Line::from(""));
                 message.push(Line::from(Span::styled(
-                    "🚀 GET READY TO CODE! 🚀",
+                    "GET READY TO LEARN A NEW LANGUAGE, BUDDY!",
                     Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
                 )));
             }
@@ -1784,8 +1965,26 @@ impl App {
         
         // Render popup with black background for readability
         let popup_area = centered_rect(75, 50, size);
+        let popup_height = popup_area.height as usize;
+        
+        // Calculate vertical centering
+        let content_height = message.len();
+        let available_height = popup_height.saturating_sub(2); // Subtract borders
+        let vertical_padding = if available_height > content_height {
+            (available_height - content_height) / 2
+        } else {
+            0
+        };
+        
+        // Add top padding
+        let mut centered_message = vec![];
+        for _ in 0..vertical_padding {
+            centered_message.push(Line::from(""));
+        }
+        centered_message.extend(message);
+        
         frame.render_widget(Clear, popup_area);
-        let popup = Paragraph::new(message)
+        let popup = Paragraph::new(centered_message)
             .alignment(Alignment::Center)
             .style(Style::default().bg(Color::Black))
             .block(Block::default()
@@ -1895,7 +2094,7 @@ impl App {
                 Style::default().fg(Color::Cyan)
             )),
             Line::from(Span::styled(
-                "║              🎰 LANGUAGE ROULETTE... 🎰                          ║",
+                "║              CONTEMPLATING LANGUAGE CHOICES...                   ║",
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
             )),
             Line::from(Span::styled(
@@ -1905,23 +2104,63 @@ impl App {
             Line::from(""),
         ];
         
-        // Add ASCII art lines
+        // Add ASCII art lines with random rainbow colors
+        let hue = (self.glitch_frame as f32 * 17.0 + progress * 360.0) % 360.0;
+        let saturation = 0.8 + rand::random::<f32>() * 0.2;
+        let brightness = 0.7 + rand::random::<f32>() * 0.3;
+        
+        let c = brightness * saturation;
+        let x = c * (1.0 - ((hue / 60.0) % 2.0 - 1.0).abs());
+        let m = brightness - c;
+        
+        let (r, g, b) = if hue < 60.0 {
+            (c, x, 0.0)
+        } else if hue < 120.0 {
+            (x, c, 0.0)
+        } else if hue < 180.0 {
+            (0.0, c, x)
+        } else if hue < 240.0 {
+            (0.0, x, c)
+        } else if hue < 300.0 {
+            (x, 0.0, c)
+        } else {
+            (c, 0.0, x)
+        };
+        
+        let color = Color::Rgb(
+            ((r + m) * 255.0) as u8,
+            ((g + m) * 255.0) as u8,
+            ((b + m) * 255.0) as u8
+        );
+        
         for line in ascii_art {
             message.push(Line::from(Span::styled(
                 line,
-                Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)
+                Style::default().fg(color).add_modifier(Modifier::BOLD)
             )));
         }
         
-        message.push(Line::from(""));
-        message.push(Line::from(Span::styled(
-            format!("   TRANSLATING: {}%   ", (progress * 100.0) as u8),
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
-        )));
-        
         let popup_area = centered_rect(75, 50, size);
+        let popup_height = popup_area.height as usize;
+        
+        // Calculate vertical centering
+        let content_height = message.len();
+        let available_height = popup_height.saturating_sub(2); // Subtract borders
+        let vertical_padding = if available_height > content_height {
+            (available_height - content_height) / 2
+        } else {
+            0
+        };
+        
+        // Add top padding
+        let mut centered_message = vec![];
+        for _ in 0..vertical_padding {
+            centered_message.push(Line::from(""));
+        }
+        centered_message.extend(message);
+        
         frame.render_widget(Clear, popup_area);
-        let popup = Paragraph::new(message)
+        let popup = Paragraph::new(centered_message)
             .alignment(Alignment::Center)
             .style(Style::default().bg(Color::Black))
             .block(Block::default()
@@ -1971,7 +2210,7 @@ impl App {
         
         // Calculate content height
         let status_lines = 1;  // Status message line
-        let ascii_digit_lines = 7;  // ASCII number lines
+        let ascii_digit_lines = 6;  // ASCII number lines
         let summary_lines = 1;  // Summary message
         let controls_lines = 1;  // Controls message
         let spacing = 8;  // Total spacing between sections
@@ -2005,11 +2244,12 @@ impl App {
             let digit_10 = self.get_ascii_number(0);
             let digit_1 = self.get_ascii_number(0);
             
-            for i in 0..7 {
+            for i in 0..6 {
                 main_text.push(Line::from(vec![
                     Span::styled(digit_100[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
                     Span::styled(digit_10[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
                     Span::styled(digit_1[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(" ".to_string(), Style::default()),
                     Span::styled(percent_symbol[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
                 ]));
             }
@@ -2018,10 +2258,11 @@ impl App {
             let digit_10 = self.get_ascii_number((score_percent / 10) % 10);
             let digit_1 = self.get_ascii_number(score_percent % 10);
             
-            for i in 0..7 {
+            for i in 0..6 {
                 main_text.push(Line::from(vec![
                     Span::styled(digit_10[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
                     Span::styled(digit_1[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(" ".to_string(), Style::default()),
                     Span::styled(percent_symbol[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
                 ]));
             }
@@ -2029,9 +2270,10 @@ impl App {
             // Show one digit for 0-9%
             let digit_1 = self.get_ascii_number(score_percent % 10);
             
-            for i in 0..7 {
+            for i in 0..6 {
                 main_text.push(Line::from(vec![
                     Span::styled(digit_1[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(" ".to_string(), Style::default()),
                     Span::styled(percent_symbol[i].clone(), Style::default().fg(score_color).add_modifier(Modifier::BOLD)),
                 ]));
             }
@@ -2121,119 +2363,107 @@ impl App {
         frame.render_widget(scoreboard_paragraph, main_layout[1]);
     }
 
-    fn get_ascii_number(&self, digit: u8) -> [String; 7] {
+    fn get_ascii_number(&self, digit: u8) -> [String; 6] {
         match digit {
             0 => [
-                " ██████╗  ".to_string(),
-                "██╔═══██╗ ".to_string(),
-                "██║   ██║ ".to_string(),
-                "██║   ██║ ".to_string(),
-                "██║   ██║ ".to_string(),
-                "╚██████╔╝ ".to_string(),
-                " ╚═════╝  ".to_string(),
+                " ██████╗ ".to_string(),
+                "██╔═══██╗".to_string(),
+                "██║   ██║".to_string(),
+                "██║   ██║".to_string(),
+                "╚██████╔╝".to_string(),
+                " ╚═════╝ ".to_string(),
             ],
             1 => [
-                " ██╗ ".to_string(),
-                "███║ ".to_string(),
-                "╚██║ ".to_string(),
-                " ██║ ".to_string(),
-                " ██║ ".to_string(),
-                " ██║ ".to_string(),
-                " ╚═╝ ".to_string(),
+                "  ██╗".to_string(),
+                " ███║".to_string(),
+                "  ██║".to_string(),
+                "  ██║".to_string(),
+                "  ██║".to_string(),
+                "  ╚═╝".to_string(),
             ],
             2 => [
-                "██████╗  ".to_string(),
-                "╚════██╗ ".to_string(),
-                "  ███╔═╝ ".to_string(),
-                " ███╔═╝  ".to_string(),
-                "███╔═╝   ".to_string(),
-                "███████╗ ".to_string(),
-                "╚══════╝ ".to_string(),
+                "██████╗ ".to_string(),
+                "╚════██╗".to_string(),
+                " █████╔╝".to_string(),
+                "██╔═══╝ ".to_string(),
+                "███████╗".to_string(),
+                "╚══════╝".to_string(),
             ],
             3 => [
-                "██████╗  ".to_string(),
-                "╚════██╗ ".to_string(),
-                "  ███╔═╝ ".to_string(),
-                " ████╗   ".to_string(),
-                " ╚═══██╗ ".to_string(),
-                "██████╔╝ ".to_string(),
-                "╚═════╝  ".to_string(),
+                "██████╗ ".to_string(),
+                "╚════██╗".to_string(),
+                " █████╔╝".to_string(),
+                " ╚═══██╗".to_string(),
+                "██████╔╝".to_string(),
+                "╚═════╝ ".to_string(),
             ],
             4 => [
-                "██╗  ██╗ ".to_string(),
-                "██║  ██║ ".to_string(),
-                "██║  ██║ ".to_string(),
-                "███████║ ".to_string(),
-                "╚════██║ ".to_string(),
-                "     ██║ ".to_string(),
-                "     ╚═╝ ".to_string(),
+                "██╗  ██╗".to_string(),
+                "██║  ██║".to_string(),
+                "███████║".to_string(),
+                "╚════██║".to_string(),
+                "     ██║".to_string(),
+                "     ╚═╝".to_string(),
             ],
             5 => [
-                "███████╗ ".to_string(),
-                "██╔════╝ ".to_string(),
-                "███████╗ ".to_string(),
-                "╚════██║ ".to_string(),
-                "     ██║ ".to_string(),
-                "███████║ ".to_string(),
-                "╚══════╝ ".to_string(),
+                "███████╗".to_string(),
+                "██╔════╝".to_string(),
+                "███████╗".to_string(),
+                "╚════██║".to_string(),
+                "███████║".to_string(),
+                "╚══════╝".to_string(),
             ],
             6 => [
-                " ██████╗  ".to_string(),
-                "██╔════╝  ".to_string(),
-                "███████╗  ".to_string(),
-                "██╔═══██╗ ".to_string(),
-                "██║   ██║ ".to_string(),
-                "╚██████╔╝ ".to_string(),
-                " ╚═════╝  ".to_string(),
+                " ██████╗ ".to_string(),
+                "██╔════╝ ".to_string(),
+                "███████╗ ".to_string(),
+                "██╔═══██╗".to_string(),
+                "╚██████╔╝".to_string(),
+                " ╚═════╝ ".to_string(),
             ],
             7 => [
-                "███████╗ ".to_string(),
-                "╚════██║ ".to_string(),
-                "    ██╔╝ ".to_string(),
-                "   ██╔╝  ".to_string(),
-                "  ██╔╝   ".to_string(),
-                "  ██║    ".to_string(),
-                "  ╚═╝    ".to_string(),
+                "███████╗".to_string(),
+                "╚════██║".to_string(),
+                "    ██╔╝".to_string(),
+                "   ██╔╝ ".to_string(),
+                "  ██╔╝  ".to_string(),
+                "  ╚═╝   ".to_string(),
             ],
             8 => [
-                " ██████╗  ".to_string(),
-                "██╔═══██╗ ".to_string(),
-                "██║   ██║ ".to_string(),
-                "╚██████╔╝ ".to_string(),
-                "██╔═══██╗ ".to_string(),
-                "╚██████╔╝ ".to_string(),
-                " ╚═════╝  ".to_string(),
+                " ██████╗ ".to_string(),
+                "██╔═══██╗".to_string(),
+                "╚██████╔╝".to_string(),
+                "██╔═══██╗".to_string(),
+                "╚██████╔╝".to_string(),
+                " ╚═════╝ ".to_string(),
             ],
             9 => [
-                " ██████╗  ".to_string(),
-                "██╔═══██╗ ".to_string(),
-                "██║   ██║ ".to_string(),
-                "╚██████╔╝ ".to_string(),
-                " ╚════██║ ".to_string(),
-                "  █████╔╝ ".to_string(),
-                "  ╚════╝  ".to_string(),
+                " ██████╗ ".to_string(),
+                "██╔═══██╗".to_string(),
+                "╚██████╔╝".to_string(),
+                " ╚════██║".to_string(),
+                " █████╔╝".to_string(),
+                " ╚════╝ ".to_string(),
             ],
             _ => [
-                "    ".to_string(),
-                "    ".to_string(),
-                "    ".to_string(),
-                "    ".to_string(),
-                "    ".to_string(),
-                "    ".to_string(),
-                "    ".to_string(),
+                "   ".to_string(),
+                "   ".to_string(),
+                "   ".to_string(),
+                "   ".to_string(),
+                "   ".to_string(),
+                "   ".to_string(),
             ],
         }
     }
 
-    fn get_ascii_percent(&self) -> [String; 7] {
+    fn get_ascii_percent(&self) -> [String; 6] {
         [
-            "  ██╗   ██╗ ".to_string(),
-            "  ██║  ██╔╝ ".to_string(),
-            "  ╚═╝ ██╔╝  ".to_string(),
-            "     ██╔╝   ".to_string(),
-            "    ██╔╝ ██╗".to_string(),
-            "   ██╔╝  ██║".to_string(),
-            "   ╚═╝   ╚═╝".to_string(),
+            "██╗ ██╗".to_string(),
+            "██║██╔╝".to_string(),
+            "╚═██╔╝ ".to_string(),
+            " ██╔╝██╗".to_string(),
+            "██╔╝ ██║".to_string(),
+            "╚═╝  ╚═╝".to_string(),
         ]
     }
 }
