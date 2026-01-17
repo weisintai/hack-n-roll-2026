@@ -255,9 +255,6 @@ fn forbidden_tokens(to: Language) -> Vec<&'static str> {
     if to != Language::Java {
         tokens.extend(["public class", "System.out", "String", "new "]);
     }
-    if to != Language::TypeScript {
-        tokens.extend(["interface ", "type ", "enum ", ": number", ": string"]);
-    }
     tokens
 }
 

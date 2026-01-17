@@ -10,7 +10,6 @@ impl SyntaxHighlighter {
         match language {
             Language::Python => Self::highlight_python(line),
             Language::JavaScript => Self::highlight_javascript(line),
-            Language::TypeScript => Self::highlight_typescript(line),
             Language::Rust => Self::highlight_rust(line),
             Language::Go => Self::highlight_go(line),
             Language::Java => Self::highlight_java(line),
@@ -56,26 +55,6 @@ impl SyntaxHighlighter {
         )
     }
 
-    fn highlight_typescript(line: &str) -> Vec<Span> {
-        let keywords = [
-            "function", "const", "let", "var", "if", "else", "for", "while", "return",
-            "class", "new", "this", "super", "extends", "import", "export", "from",
-            "async", "await", "try", "catch", "finally", "throw", "typeof", "instanceof",
-            "null", "undefined", "true", "false", "break", "continue", "switch", "case",
-            "default", "do", "interface", "type", "enum", "namespace", "public", "private",
-            "protected", "readonly", "static", "abstract",
-        ];
-        
-        Self::tokenize_and_color(
-            line,
-            &keywords,
-            '/',
-            Color::Blue,     // Keywords
-            Color::Gray,     // Comments
-            Color::Yellow,   // Strings
-            Color::Cyan,     // Numbers
-        )
-    }
 
     fn highlight_rust(line: &str) -> Vec<Span> {
         let keywords = [

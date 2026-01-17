@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Language {
     JavaScript,
-    TypeScript,
     Python,
     Rust,
     Go,
@@ -15,7 +14,6 @@ impl Language {
     pub fn all() -> Vec<Language> {
         vec![
             Language::JavaScript,
-            Language::TypeScript,
             Language::Python,
             Language::Rust,
             Language::Go,
@@ -35,7 +33,6 @@ impl Language {
     pub fn as_str(&self) -> &'static str {
         match self {
             Language::JavaScript => "javascript",
-            Language::TypeScript => "typescript",
             Language::Python => "python",
             Language::Rust => "rust",
             Language::Go => "go",
@@ -46,7 +43,6 @@ impl Language {
     pub fn display_name(&self) -> &'static str {
         match self {
             Language::JavaScript => "JavaScript",
-            Language::TypeScript => "TypeScript",
             Language::Python => "Python",
             Language::Rust => "Rust",
             Language::Go => "Go",
@@ -87,20 +83,6 @@ impl Language {
                 bump(&mut score, code, "null", 1);
                 bump(&mut score, code, "export ", 1);
                 bump(&mut score, code, "import ", 1);
-            }
-            Language::TypeScript => {
-                bump(&mut score, code, "interface ", 3);
-                bump(&mut score, code, "type ", 2);
-                bump(&mut score, code, "enum ", 2);
-                bump(&mut score, code, ": number", 2);
-                bump(&mut score, code, ": string", 2);
-                bump(&mut score, code, ": boolean", 2);
-                bump(&mut score, code, "readonly ", 2);
-                bump(&mut score, code, "implements ", 1);
-                bump(&mut score, code, "extends ", 1);
-                bump(&mut score, code, "public ", 1);
-                bump(&mut score, code, "private ", 1);
-                bump(&mut score, code, "protected ", 1);
             }
             Language::Rust => {
                 bump(&mut score, code, "fn ", 3);
