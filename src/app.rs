@@ -1967,11 +1967,29 @@ impl App {
             .split(centered_rect(95, 90, size));
 
         // Main score area
-        let mut main_text = vec![
-            Line::from(""),
-            Line::from(""),
-            Line::from(""),
-        ];
+        let main_area_height = main_layout[0].height as usize;
+        
+        // Calculate content height
+        let status_lines = 1;  // Status message line
+        let ascii_digit_lines = 7;  // ASCII number lines
+        let summary_lines = 1;  // Summary message
+        let controls_lines = 1;  // Controls message
+        let spacing = 8;  // Total spacing between sections
+        let total_content_height = status_lines + ascii_digit_lines + summary_lines + controls_lines + spacing;
+        
+        // Calculate vertical padding to center the content
+        let vertical_padding = if main_area_height > total_content_height {
+            (main_area_height - total_content_height) / 2
+        } else {
+            1
+        };
+        
+        let mut main_text = vec![];
+        
+        // Add top padding for vertical centering
+        for _ in 0..vertical_padding {
+            main_text.push(Line::from(""));
+        }
 
         // Status message
         main_text.push(Line::from(Span::styled(score_msg, Style::default().fg(score_color).add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED))));
