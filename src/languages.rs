@@ -53,128 +53,127 @@ impl Language {
             Language::Java => "Java",
         }
     }
-}
 
-/// Mock code converter - in production, this would call an LLM API
-pub fn convert_code(code: &str, from: Language, to: Language) -> String {
-    if from == to {
-        return code.to_string();
+    fn score_hint(&self, code: &str) -> i32 {
+        fn bump(score: &mut i32, code: &str, token: &str, weight: i32) {
+            if code.contains(token) {
+                *score += weight;
+            }
+        }
+
+        let mut score = 0;
+        match self {
+            Language::Python => {
+                bump(&mut score, code, "def ", 3);
+                bump(&mut score, code, "class ", 2);
+                bump(&mut score, code, "import ", 2);
+                bump(&mut score, code, "from ", 1);
+                bump(&mut score, code, "self", 2);
+                bump(&mut score, code, "None", 2);
+                bump(&mut score, code, "True", 1);
+                bump(&mut score, code, "False", 1);
+                bump(&mut score, code, "elif ", 1);
+                bump(&mut score, code, "pass", 1);
+                bump(&mut score, code, "#", 1);
+            }
+            Language::JavaScript => {
+                bump(&mut score, code, "function ", 2);
+                bump(&mut score, code, "const ", 2);
+                bump(&mut score, code, "let ", 2);
+                bump(&mut score, code, "var ", 1);
+                bump(&mut score, code, "=>", 2);
+                bump(&mut score, code, "console.log", 2);
+                bump(&mut score, code, "undefined", 1);
+                bump(&mut score, code, "null", 1);
+                bump(&mut score, code, "export ", 1);
+                bump(&mut score, code, "import ", 1);
+            }
+            Language::TypeScript => {
+                bump(&mut score, code, "interface ", 3);
+                bump(&mut score, code, "type ", 2);
+                bump(&mut score, code, "enum ", 2);
+                bump(&mut score, code, ": number", 2);
+                bump(&mut score, code, ": string", 2);
+                bump(&mut score, code, ": boolean", 2);
+                bump(&mut score, code, "readonly ", 2);
+                bump(&mut score, code, "implements ", 1);
+                bump(&mut score, code, "extends ", 1);
+                bump(&mut score, code, "public ", 1);
+                bump(&mut score, code, "private ", 1);
+                bump(&mut score, code, "protected ", 1);
+            }
+            Language::Rust => {
+                bump(&mut score, code, "fn ", 3);
+                bump(&mut score, code, "let ", 2);
+                bump(&mut score, code, "mut ", 1);
+                bump(&mut score, code, "println!", 3);
+                bump(&mut score, code, "Vec<", 2);
+                bump(&mut score, code, "Option<", 2);
+                bump(&mut score, code, "::", 2);
+                bump(&mut score, code, "->", 1);
+                bump(&mut score, code, "usize", 2);
+                bump(&mut score, code, "i32", 2);
+                bump(&mut score, code, "i64", 2);
+                bump(&mut score, code, "pub ", 1);
+                bump(&mut score, code, "impl ", 2);
+            }
+            Language::Go => {
+                bump(&mut score, code, "func ", 3);
+                bump(&mut score, code, "package ", 2);
+                bump(&mut score, code, "fmt.", 2);
+                bump(&mut score, code, ":=", 2);
+                bump(&mut score, code, "[]int", 2);
+                bump(&mut score, code, "[]string", 2);
+                bump(&mut score, code, "map[", 2);
+                bump(&mut score, code, "struct {", 2);
+                bump(&mut score, code, "interface {", 2);
+                bump(&mut score, code, "nil", 1);
+            }
+            Language::Java => {
+                bump(&mut score, code, "public class", 3);
+                bump(&mut score, code, "public static", 2);
+                bump(&mut score, code, "System.out", 3);
+                bump(&mut score, code, "new ", 1);
+                bump(&mut score, code, "String", 2);
+                bump(&mut score, code, "int ", 1);
+                bump(&mut score, code, "boolean", 1);
+                bump(&mut score, code, "void ", 1);
+                bump(&mut score, code, "package ", 2);
+                bump(&mut score, code, "import ", 1);
+                bump(&mut score, code, "extends ", 1);
+                bump(&mut score, code, "implements ", 1);
+            }
+        }
+        score
     }
 
-    // Mock conversion - just wrap the code with language-specific syntax
-    match to {
-        Language::JavaScript => mock_convert_to_js(code),
-        Language::TypeScript => mock_convert_to_ts(code),
-        Language::Python => mock_convert_to_python(code),
-        Language::Rust => mock_convert_to_rust(code),
-        Language::Go => mock_convert_to_go(code),
-        Language::Java => mock_convert_to_java(code),
+    pub fn detect_best_language(code: &str) -> Option<Language> {
+        let trimmed = code.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        let mut best = None;
+        let mut best_score = 0;
+        let mut second_best = 0;
+
+        for lang in Language::all() {
+            let score = lang.score_hint(trimmed);
+            if score > best_score {
+                second_best = best_score;
+                best_score = score;
+                best = Some(lang);
+            } else if score > second_best {
+                second_best = score;
+            }
+        }
+
+        if best_score < 2 || (best_score - second_best) < 2 {
+            None
+        } else {
+            best
+        }
     }
 }
 
-fn mock_convert_to_js(_code: &str) -> String {
-    format!(
-        r#"// JavaScript conversion
-function twoSum(nums, target) {{
-    const map = new Map();
-    for (let i = 0; i < nums.length; i++) {{
-        const complement = target - nums[i];
-        if (map.has(complement)) {{
-            return [map.get(complement), i];
-        }}
-        map.set(nums[i], i);
-    }}
-    return [];
-}}
-"#
-    )
-}
-
-fn mock_convert_to_ts(_code: &str) -> String {
-    format!(
-        r#"// TypeScript conversion
-function twoSum(nums: number[], target: number): number[] {{
-    const map = new Map<number, number>();
-    for (let i = 0; i < nums.length; i++) {{
-        const complement = target - nums[i];
-        if (map.has(complement)) {{
-            return [map.get(complement)!, i];
-        }}
-        map.set(nums[i], i);
-    }}
-    return [];
-}}
-"#
-    )
-}
-
-fn mock_convert_to_python(_code: &str) -> String {
-    format!(
-        r#"# Python conversion
-def two_sum(nums, target):
-    num_map = {{}}
-    for i, num in enumerate(nums):
-        complement = target - num
-        if complement in num_map:
-            return [num_map[complement], i]
-        num_map[num] = i
-    return []
-"#
-    )
-}
-
-fn mock_convert_to_rust(_code: &str) -> String {
-    format!(
-        r#"// Rust conversion
-use std::collections::HashMap;
-
-pub fn two_sum(nums: Vec<i32>, target: i32) -> Vec<i32> {{
-    let mut map = HashMap::new();
-    for (i, &num) in nums.iter().enumerate() {{
-        let complement = target - num;
-        if let Some(&j) = map.get(&complement) {{
-            return vec![j as i32, i as i32];
-        }}
-        map.insert(num, i);
-    }}
-    vec![]
-}}
-"#
-    )
-}
-
-fn mock_convert_to_go(_code: &str) -> String {
-    format!(
-        r#"// Go conversion
-func twoSum(nums []int, target int) []int {{
-    m := make(map[int]int)
-    for i, num := range nums {{
-        complement := target - num
-        if j, ok := m[complement]; ok {{
-            return []int{{j, i}}
-        }}
-        m[num] = i
-    }}
-    return []int{{}}
-}}
-"#
-    )
-}
-
-fn mock_convert_to_java(_code: &str) -> String {
-    format!(
-        r#"// Java conversion
-public int[] twoSum(int[] nums, int target) {{
-    Map<Integer, Integer> map = new HashMap<>();
-    for (int i = 0; i < nums.length; i++) {{
-        int complement = target - nums[i];
-        if (map.containsKey(complement)) {{
-            return new int[] {{ map.get(complement), i }};
-        }}
-        map.put(nums[i], i);
-    }}
-    return new int[] {{}};
-}}
-"#
-    )
-}
+// Code conversion is now handled by src/llm.rs using the Gemini API

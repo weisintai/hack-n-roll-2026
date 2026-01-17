@@ -7,4 +7,9 @@
 .vscode/
 
 # Environment
-.env*
+.env
+.env.local
+!.env.example
+
+# Miscellaneous
+debug.log

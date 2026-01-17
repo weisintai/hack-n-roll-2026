@@ -1,5 +1,6 @@
 mod app;
 mod languages;
+mod llm;
 mod problem;
 mod syntax;
 
@@ -14,7 +15,11 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 use std::time::Duration;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Load environment variables from .env file
+    dotenvy::dotenv().ok();
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();

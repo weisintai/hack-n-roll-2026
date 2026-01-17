@@ -6,11 +6,24 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
+use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
+use std::io::Write;
 
-use crate::languages::{convert_code, Language};
+use crate::languages::Language;
+use crate::llm::{LlmConverter, StreamChunk};
 use crate::problem::{run_tests, Problem, TestResults};
 use crate::syntax::SyntaxHighlighter;
+
+fn debug_log(msg: &str) {
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/Users/weisintai/development/hackathon/2026/hackn-n-roll/debug.log")
+    {
+        let _ = writeln!(file, "[APP] {}", msg);
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppState {
@@ -32,13 +45,31 @@ pub struct App {
     pub transition_start: Option<Instant>,
     pub glitch_frame: usize,
     pub editor_area: Rect,
+    // LLM conversion state
+    pub converter: Option<LlmConverter>,
+    pub stream_receiver: Option<Receiver<StreamChunk>>,
+    pub streamed_code: String,
+    pub target_language: Option<Language>,
+    pub conversion_error: Option<String>,
 }
 
 impl App {
     pub fn new() -> Self {
         let current_language = Language::Python;
         let problem = Problem::two_sum();
-        
+
+        // Try to initialize LLM converter
+        let converter = match LlmConverter::new() {
+            Ok(c) => {
+                debug_log("LLM converter initialized successfully");
+                Some(c)
+            }
+            Err(e) => {
+                debug_log(&format!("LLM converter not available: {}", e));
+                None
+            }
+        };
+
         Self {
             problem,
             code: String::from("def two_sum(nums, target):\n    # Write your solution here\n    pass\n"),
@@ -46,12 +77,17 @@ impl App {
             current_language,
             state: AppState::Coding,
             last_randomize: Instant::now(),
-            randomize_interval: Duration::from_secs(45),
+            randomize_interval: Duration::from_secs(10), // Quick test - change to 45 for production
             test_results: None,
             scroll_offset: 0,
             transition_start: None,
             glitch_frame: 0,
             editor_area: Rect::default(),
+            converter,
+            stream_receiver: None,
+            streamed_code: String::new(),
+            target_language: None,
+            conversion_error: None,
         }
     }
 
@@ -66,16 +102,64 @@ impl App {
             }
         }
 
-        // Update transition progress
-        if let AppState::Transitioning(_progress) = self.state {
-            if let Some(start) = self.transition_start {
-                let elapsed = start.elapsed().as_secs_f32();
-                let new_progress = (elapsed / 2.0).min(1.0); // 2 second transition
-                
-                if new_progress >= 1.0 {
-                    self.complete_transition();
-                } else {
-                    self.state = AppState::Transitioning(new_progress);
+        // Poll stream receiver for chunks during transition
+        if let AppState::Transitioning(_) = self.state {
+            if self.stream_receiver.is_some() {
+                self.poll_stream();
+            } else {
+                // No converter available, complete after short visual delay
+                if let Some(start) = self.transition_start {
+                    if start.elapsed() >= Duration::from_secs(1) {
+                        self.complete_transition();
+                    } else {
+                        let progress = start.elapsed().as_secs_f32();
+                        self.state = AppState::Transitioning(progress);
+                    }
+                }
+            }
+        }
+    }
+
+    fn poll_stream(&mut self) {
+        if let Some(ref receiver) = self.stream_receiver {
+            // Non-blocking poll for chunks
+            loop {
+                match receiver.try_recv() {
+                    Ok(StreamChunk::Text(text)) => {
+                        debug_log(&format!("Received chunk: {} chars", text.len()));
+                        self.streamed_code.push_str(&text);
+                        // Update progress based on content received
+                        if let Some(start) = self.transition_start {
+                            let elapsed = start.elapsed().as_secs_f32();
+                            // Progress is time-based but capped at 0.9 until done
+                            let progress = (elapsed / 5.0).min(0.9);
+                            self.state = AppState::Transitioning(progress);
+                        }
+                    }
+                    Ok(StreamChunk::Done) => {
+                        self.complete_transition();
+                        break;
+                    }
+                    Ok(StreamChunk::Error(e)) => {
+                        debug_log(&format!("Stream error: {}", e));
+                        self.conversion_error = Some(e);
+                        self.complete_transition_with_error();
+                        break;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        // No more chunks available right now
+                        break;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        // Stream ended unexpectedly
+                        if !self.streamed_code.is_empty() {
+                            self.complete_transition();
+                        } else {
+                            self.conversion_error = Some("Stream disconnected".to_string());
+                            self.complete_transition_with_error();
+                        }
+                        break;
+                    }
                 }
             }
         }
@@ -84,18 +168,79 @@ impl App {
     fn start_transition(&mut self) {
         self.transition_start = Some(Instant::now());
         self.state = AppState::Transitioning(0.0);
+
+        // Pick target language and start streaming conversion
+        let new_lang = self.current_language.random_except();
+        self.target_language = Some(new_lang);
+        self.streamed_code.clear();
+        self.conversion_error = None;
+
+        if let Some(ref converter) = self.converter {
+            debug_log(&format!("Starting streaming conversion: {} -> {}", self.current_language.display_name(), new_lang.display_name()));
+            let receiver = converter.start_streaming_conversion(
+                self.code.clone(),
+                self.current_language,
+                new_lang,
+            );
+            self.stream_receiver = Some(receiver);
+        } else {
+            debug_log("No converter available!");
+            // No converter available, just do a simple "conversion" (keep code as-is)
+            self.streamed_code = self.code.clone();
+            self.stream_receiver = None;
+            // Will complete on next tick
+        }
     }
 
     fn complete_transition(&mut self) {
-        // Randomize language
-        let new_lang = self.current_language.random_except();
-        self.code = convert_code(&self.code, self.current_language, new_lang);
-        self.current_language = new_lang;
-        
-        // Reset timer
+        // Apply the streamed converted code
+        if let Some(new_lang) = self.target_language.take() {
+            if self.streamed_code.trim().is_empty() {
+                self.conversion_error = Some("LLM returned empty output".to_string());
+                debug_log("LLM output empty; keeping original language");
+                self.complete_transition_with_error();
+                return;
+            }
+
+            if let Some(best_lang) = Language::detect_best_language(&self.streamed_code) {
+                if best_lang != new_lang {
+                    self.conversion_error = Some(format!(
+                        "LLM output looked like {} instead of {}",
+                        best_lang.display_name(),
+                        new_lang.display_name()
+                    ));
+                    debug_log(&format!(
+                        "LLM output language mismatch: expected {}, detected {}",
+                        new_lang.display_name(),
+                        best_lang.display_name()
+                    ));
+                    self.complete_transition_with_error();
+                    return;
+                }
+            }
+
+            self.code = self.streamed_code.clone();
+            self.current_language = new_lang;
+        }
+
+        // Reset state
         self.last_randomize = Instant::now();
         self.state = AppState::Coding;
         self.transition_start = None;
+        self.stream_receiver = None;
+        self.streamed_code.clear();
+    }
+
+    fn complete_transition_with_error(&mut self) {
+        // On error, keep the original code and language
+        self.target_language = None;
+
+        // Reset state
+        self.last_randomize = Instant::now();
+        self.state = AppState::Coding;
+        self.transition_start = None;
+        self.stream_receiver = None;
+        self.streamed_code.clear();
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
@@ -632,7 +777,19 @@ impl App {
     fn submit(&mut self) {
         // Convert to Python and run tests
         let python_code = if self.current_language != Language::Python {
-            convert_code(&self.code, self.current_language, Language::Python)
+            if let Some(ref converter) = self.converter {
+                match converter.convert_code_sync(&self.code, self.current_language, Language::Python) {
+                    Ok(code) => code,
+                    Err(e) => {
+                        // On error, try to run with original code anyway
+                        eprintln!("Conversion error: {}", e);
+                        self.code.clone()
+                    }
+                }
+            } else {
+                // No converter, use original code
+                self.code.clone()
+            }
         } else {
             self.code.clone()
         };
@@ -883,58 +1040,91 @@ impl App {
         } else {
             0.0
         };
-        
-        // Create glitch effect
-        let glitch_chars = ["█", "▓", "▒", "░", "▄", "▀", "▌", "▐"];
-        let mut lines = Vec::new();
-        let char_idx = (self.glitch_frame % glitch_chars.len()) as usize;
-        
-        let height = size.height as usize;
-        let width = size.width as usize;
-        
-        for i in 0..height {
-            let intensity = ((i as f32 / height as f32) - progress).abs();
-            let color = if intensity < 0.1 {
-                Color::Cyan
-            } else if intensity < 0.3 {
-                Color::Magenta
-            } else {
-                Color::Blue
-            };
-            
-            let mut line_text = String::new();
-            for _ in 0..width {
-                if rand::random::<f32>() < progress {
-                    line_text.push_str(glitch_chars[char_idx]);
-                } else {
-                    line_text.push(' ');
-                }
-            }
-            
-            lines.push(Line::from(Span::styled(line_text, Style::default().fg(color))));
-        }
-        
-        // Overlay transition message
-        let message = vec![
-            Line::from(""),
-            Line::from(Span::styled("▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓", Style::default().fg(Color::Cyan))),
-            Line::from(""),
-            Line::from(Span::styled("   RANDOMIZING CODE...   ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
-            Line::from(""),
-            Line::from(Span::styled(format!("   PROGRESS: {}%   ", (progress * 100.0) as u8), Style::default().fg(Color::White))),
-            Line::from(""),
-            Line::from(Span::styled("▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓", Style::default().fg(Color::Cyan))),
+
+        // Main layout: header + content + footer
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),  // Header
+                Constraint::Min(0),     // Content - streaming code
+                Constraint::Length(3),  // Status bar
+            ])
+            .split(size);
+
+        // Header with transition info
+        let target_lang = self.target_language
+            .map(|l| l.display_name())
+            .unwrap_or("???");
+
+        let header_text = vec![
+            Span::styled("⚡ ", Style::default().fg(Color::Yellow)),
+            Span::styled("CONVERTING TO ", Style::default().fg(Color::White)),
+            Span::styled(target_lang, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" ⚡", Style::default().fg(Color::Yellow)),
         ];
-        
-        let bg = Paragraph::new(lines);
-        frame.render_widget(bg, size);
-        
-        let popup_area = centered_rect(30, 20, size);
-        let popup = Paragraph::new(message)
+
+        let header = Paragraph::new(Line::from(header_text))
             .alignment(Alignment::Center)
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Cyan)));
-        
-        frame.render_widget(popup, popup_area);
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Magenta)));
+        frame.render_widget(header, chunks[0]);
+
+        // Streaming code display
+        let code_to_display = if self.streamed_code.is_empty() {
+            "Waiting for response...".to_string()
+        } else {
+            self.streamed_code.clone()
+        };
+
+        let code_lines: Vec<Line> = code_to_display
+            .lines()
+            .enumerate()
+            .map(|(i, line)| {
+                let line_num = format!("{:>3} ", i + 1);
+                Line::from(vec![
+                    Span::styled(line_num, Style::default().fg(Color::DarkGray)),
+                    Span::styled(line, Style::default().fg(Color::Green)),
+                ])
+            })
+            .collect();
+
+        let code_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Green))
+            .title(Span::styled(
+                " STREAMING CODE ",
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            ));
+
+        let code_paragraph = Paragraph::new(code_lines)
+            .block(code_block)
+            .wrap(Wrap { trim: false });
+        frame.render_widget(code_paragraph, chunks[1]);
+
+        // Progress bar / status
+        let progress_percent = (progress * 100.0) as u8;
+        let bar_width = 20;
+        let filled = (progress * bar_width as f32) as usize;
+        let empty = bar_width - filled;
+        let progress_bar = format!(
+            "[{}{}] {}%",
+            "█".repeat(filled),
+            "░".repeat(empty),
+            progress_percent
+        );
+
+        let status_text = vec![
+            Span::styled("Converting: ", Style::default().fg(Color::Cyan)),
+            Span::styled(progress_bar, Style::default().fg(Color::Yellow)),
+            Span::styled(
+                format!(" | {} chars received", self.streamed_code.len()),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ];
+
+        let status = Paragraph::new(Line::from(status_text))
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
+        frame.render_widget(status, chunks[2]);
     }
 
     fn render_results(&self, frame: &mut Frame, ) {
