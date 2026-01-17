@@ -1,5 +1,6 @@
 mod app;
 mod languages;
+mod llm;
 mod problem;
 mod syntax;
 
@@ -16,6 +17,8 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenvy::dotenv().ok();
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -55,6 +58,7 @@ async fn run_app<B: ratatui::backend::Backend>(
 
         // Poll for async execution output
         app.poll_execution();
+        app.poll_translation();
 
         // Calculate timeout for next tick
         let timeout = tick_rate
@@ -96,4 +100,3 @@ async fn run_app<B: ratatui::backend::Backend>(
         }
     }
 }
-

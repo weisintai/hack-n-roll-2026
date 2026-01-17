@@ -480,3 +480,99 @@ print(json.dumps(results))
 
 === End Exchange ===
 
+[2026-01-17 17:06:15] === Piston Full Exchange: Rust ===
+
+--- Generated Code ---
+
+// User's code
+fn is_palindrome(s: Box<dyn Any>) -> bool {
+    // Write your solution here
+    for i in 0..len(s) {
+        print!("{}", i)
+    }
+}
+
+fn main() {
+    let mut idx = 0;
+    print!("[");
+
+    // Test case 1
+    {
+        let nums = vec![];
+        let target = 0;
+        let expected = vec!true;
+        let actual = two_sum(nums, target);
+        
+        let mut sorted_actual = actual.clone();
+        sorted_actual.sort();
+        let mut sorted_expected = expected.clone();
+        sorted_expected.sort();
+        
+        let passed = sorted_actual == sorted_expected;
+        if idx > 0 { print!(","); }
+        print!("{{\"passed\":{},", passed);
+        print!("\"actual\":\"{:?}\"}}", actual);
+        idx += 1;
+    }
+
+    // Test case 2
+    {
+        let nums = vec![];
+        let target = 0;
+        let expected = vec!false;
+        let actual = two_sum(nums, target);
+        
+        let mut sorted_actual = actual.clone();
+        sorted_actual.sort();
+        let mut sorted_expected = expected.clone();
+        sorted_expected.sort();
+        
+        let passed = sorted_actual == sorted_expected;
+        if idx > 0 { print!(","); }
+        print!("{{\"passed\":{},", passed);
+        print!("\"actual\":\"{:?}\"}}", actual);
+        idx += 1;
+    }
+
+    // Test case 3
+    {
+        let nums = vec![];
+        let target = 0;
+        let expected = vec!true;
+        let actual = two_sum(nums, target);
+        
+        let mut sorted_actual = actual.clone();
+        sorted_actual.sort();
+        let mut sorted_expected = expected.clone();
+        sorted_expected.sort();
+        
+        let passed = sorted_actual == sorted_expected;
+        if idx > 0 { print!(","); }
+        print!("{{\"passed\":{},", passed);
+        print!("\"actual\":\"{:?}\"}}", actual);
+        idx += 1;
+    }
+
+    println!("]")
+}
+
+
+--- Response ---
+[Request sent, awaiting response...]
+
+=== End Exchange ===
+
+[2026-01-17 17:06:16] === Piston Full Exchange: Rust ===
+
+--- Generated Code ---
+[See previous request]
+
+--- Response ---
+{
+  "exit_code": null,
+  "stderr": "error: expected one of `(`, `[`, or `{`, found keyword `true`\n  --> solution.rs:18:28\n   |\n18 |         let expected = vec!true;\n   |                            ^^^^ expected one of `(`, `[`, or `{`\n\nerror: expected one of `(`, `[`, or `{`, found keyword `false`\n  --> solution.rs:37:28\n   |\n37 |         let expected = vec!false;\n   |                            ^^^^^ expected one of `(`, `[`, or `{`\n\nerror: expected one of `(`, `[`, or `{`, found keyword `true`\n  --> solution.rs:56:28\n   |\n56 |         let expected = vec!true;\n   |                            ^^^^ expected one of `(`, `[`, or `{`\n\nerror[E0405]: cannot find trait `Any` in this scope\n --> solution.rs:3:29\n  |\n3 | fn is_palindrome(s: Box<dyn Any>) -> bool {\n  |                             ^^^ not found in this scope\n  |\nhelp: consider importing this trait\n  |\n3 | use std::any::Any;\n  |\n\nerror[E0425]: cannot find function `len` in this scope\n --> solution.rs:5:17\n  |\n5 |     for i in 0..len(s) {\n  |                 ^^^ not found in this scope\n  |\n\n",
+  "stdout": ""
+}
+
+=== End Exchange ===
+
