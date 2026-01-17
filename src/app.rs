@@ -15,8 +15,41 @@ use crate::syntax::SyntaxHighlighter;
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppState {
     Coding,
-    Transitioning(f32), // 0.0 to 1.0 progress
+    Countdown(u8),           // 5, 4, 3, 2, 1
+    Transitioning(f32),      // 0.0 to 1.0 progress (glitch effect)
+    Revealing(f32),          // 0.0 to 1.0 progress (reveal new language/problem)
     Results,
+}
+
+/// Generate starter code template for a problem in a specific language
+fn get_starter_code(problem: &Problem, language: Language) -> String {
+    let func_name = &problem.function_name;
+    match language {
+        Language::Python => format!(
+            "def {}(...):\n    # Write your solution here\n    pass\n",
+            func_name
+        ),
+        Language::JavaScript => format!(
+            "function {}(...) {{\n    // Write your solution here\n    \n}}\n",
+            func_name
+        ),
+        Language::TypeScript => format!(
+            "function {}(...): any {{\n    // Write your solution here\n    \n}}\n",
+            func_name
+        ),
+        Language::Rust => format!(
+            "pub fn {}(...) -> ... {{\n    // Write your solution here\n    todo!()\n}}\n",
+            func_name
+        ),
+        Language::Go => format!(
+            "func {}(...) ... {{\n    // Write your solution here\n    return nil\n}}\n",
+            func_name
+        ),
+        Language::Java => format!(
+            "public ... {}(...) {{\n    // Write your solution here\n    return null;\n}}\n",
+            func_name
+        ),
+    }
 }
 
 pub struct App {
@@ -32,16 +65,19 @@ pub struct App {
     pub transition_start: Option<Instant>,
     pub glitch_frame: usize,
     pub editor_area: Rect,
+    pub countdown_start: Option<Instant>,
+    pub pending_language: Option<Language>,
+    pub pending_problem: Option<Problem>,
 }
 
 impl App {
     pub fn new() -> Self {
         let current_language = Language::Python;
-        let problem = Problem::two_sum();
+        let problem = Problem::random();
         
         Self {
-            problem,
-            code: String::from("def two_sum(nums, target):\n    # Write your solution here\n    pass\n"),
+            problem: problem.clone(),
+            code: get_starter_code(&problem, current_language),
             cursor_position: 0,
             current_language,
             state: AppState::Coding,
@@ -52,17 +88,36 @@ impl App {
             transition_start: None,
             glitch_frame: 0,
             editor_area: Rect::default(),
+            countdown_start: None,
+            pending_language: None,
+            pending_problem: None,
         }
     }
 
     pub fn tick(&mut self) {
         self.glitch_frame = (self.glitch_frame + 1) % 10;
 
-        // Check if it's time to randomize
+        // Check if it's time to start countdown
         if self.state == AppState::Coding {
             let elapsed = self.last_randomize.elapsed();
-            if elapsed >= self.randomize_interval {
-                self.start_transition();
+            // Start countdown 5 seconds before randomize time
+            let countdown_threshold = self.randomize_interval.saturating_sub(Duration::from_secs(5));
+            if elapsed >= countdown_threshold && self.countdown_start.is_none() {
+                self.start_countdown();
+            }
+        }
+
+        // Update countdown
+        if let AppState::Countdown(count) = self.state {
+            if let Some(start) = self.countdown_start {
+                let elapsed = start.elapsed().as_secs_f32();
+                let new_count = (5.0 - elapsed.floor()).max(0.0) as u8;
+                
+                if new_count == 0 || elapsed >= 5.0 {
+                    self.start_transition();
+                } else if new_count != count {
+                    self.state = AppState::Countdown(new_count);
+                }
             }
         }
 
@@ -70,15 +125,37 @@ impl App {
         if let AppState::Transitioning(_progress) = self.state {
             if let Some(start) = self.transition_start {
                 let elapsed = start.elapsed().as_secs_f32();
-                let new_progress = (elapsed / 2.0).min(1.0); // 2 second transition
+                let new_progress = (elapsed / 1.5).min(1.0); // 1.5 second transition
                 
                 if new_progress >= 1.0 {
-                    self.complete_transition();
+                    self.start_reveal();
                 } else {
                     self.state = AppState::Transitioning(new_progress);
                 }
             }
         }
+
+        // Update reveal progress
+        if let AppState::Revealing(_progress) = self.state {
+            if let Some(start) = self.transition_start {
+                let elapsed = start.elapsed().as_secs_f32();
+                let new_progress = (elapsed / 2.0).min(1.0); // 2 second reveal
+                
+                if new_progress >= 1.0 {
+                    self.complete_transition();
+                } else {
+                    self.state = AppState::Revealing(new_progress);
+                }
+            }
+        }
+    }
+
+    fn start_countdown(&mut self) {
+        self.countdown_start = Some(Instant::now());
+        self.state = AppState::Countdown(5);
+        
+        // Pre-calculate the new language only (problem stays the same)
+        self.pending_language = Some(self.current_language.random_except());
     }
 
     fn start_transition(&mut self) {
@@ -86,24 +163,41 @@ impl App {
         self.state = AppState::Transitioning(0.0);
     }
 
+    fn start_reveal(&mut self) {
+        self.transition_start = Some(Instant::now());
+        self.state = AppState::Revealing(0.0);
+    }
+
     fn complete_transition(&mut self) {
-        // Randomize language
-        let new_lang = self.current_language.random_except();
-        self.code = convert_code(&self.code, self.current_language, new_lang);
-        self.current_language = new_lang;
+        // Apply the pending language only (keep the same problem)
+        if let Some(new_lang) = self.pending_language.take() {
+            self.code = convert_code(&self.code, self.current_language, new_lang);
+            self.current_language = new_lang;
+        }
         
-        // Reset timer
+        // Clear any pending problem (not used in auto-transition)
+        self.pending_problem = None;
+        
+        // Reset timer and state
         self.last_randomize = Instant::now();
         self.state = AppState::Coding;
         self.transition_start = None;
+        self.countdown_start = None;
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
         match self.state {
-            AppState::Coding => self.handle_coding_key(key),
+            AppState::Coding | AppState::Countdown(_) => self.handle_coding_key(key),
             AppState::Results => self.handle_results_key(key),
-            AppState::Transitioning(_) => {}, // No input during transition
+            AppState::Transitioning(_) | AppState::Revealing(_) => {}, // No input during transition
         }
+    }
+
+    fn randomize_problem(&mut self) {
+        let new_problem = self.problem.random_except();
+        self.problem = new_problem.clone();
+        self.code = get_starter_code(&new_problem, self.current_language);
+        self.cursor_position = 0;
     }
 
     fn handle_coding_key(&mut self, key: KeyEvent) {
@@ -129,6 +223,11 @@ impl App {
                 // Cmd/Ctrl+Q to quit (handled in main.rs, but listed here for consistency)
                 KeyCode::Char('q') | KeyCode::Char('Q') => {
                     return; // Let main.rs handle the quit
+                }
+                // Cmd/Ctrl+R to randomize problem
+                KeyCode::Char('r') | KeyCode::Char('R') => {
+                    self.randomize_problem();
+                    return;
                 }
                 // Cmd/Ctrl+A: move to start of line (like bash/zsh)
                 KeyCode::Char('a') | KeyCode::Char('A') => {
@@ -645,7 +744,9 @@ impl App {
     pub fn render(&mut self, frame: &mut Frame) {
         match &self.state {
             AppState::Coding => self.render_coding(frame),
-            AppState::Transitioning(_) => self.render_transition(frame),
+            AppState::Countdown(count) => self.render_countdown(frame, *count),
+            AppState::Transitioning(progress) => self.render_transition(frame, *progress),
+            AppState::Revealing(progress) => self.render_reveal(frame, *progress),
             AppState::Results => self.render_results(frame),
         }
     }
@@ -852,20 +953,20 @@ impl App {
         let footer_text = vec![
             Span::styled("⏱ ", Style::default().fg(Color::Cyan)),
             Span::styled(format!("{}s", secs), Style::default().fg(timer_color).add_modifier(Modifier::BOLD)),
-            Span::styled(" | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Ctrl+S ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+            Span::styled("^S ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::styled("Submit", Style::default().fg(Color::White)),
-            Span::styled(" | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Ctrl+A/E ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+            Span::styled("^R ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+            Span::styled("New Problem", Style::default().fg(Color::White)),
+            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+            Span::styled("^A/E ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             Span::styled("Line", Style::default().fg(Color::White)),
-            Span::styled(" | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Alt+F/B ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Alt+←/→ ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::styled("Word", Style::default().fg(Color::White)),
-            Span::styled(" | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Ctrl+U/K ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-            Span::styled("Cut", Style::default().fg(Color::White)),
-            Span::styled(" | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Ctrl+Q ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+            Span::styled("^Q ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
             Span::styled("Quit", Style::default().fg(Color::White)),
         ];
 
@@ -876,7 +977,149 @@ impl App {
         frame.render_widget(footer, area);
     }
 
-    fn render_transition(&self, frame: &mut Frame) {
+    fn render_countdown(&mut self, frame: &mut Frame, count: u8) {
+        let size = frame.size();
+        
+        // First render the normal coding view so user can see their code
+        self.render_coding(frame);
+        
+        // Then overlay the countdown popup
+        let color = match count {
+            5 => Color::Green,
+            4 => Color::Yellow,
+            3 => Color::Yellow,
+            2 => Color::Rgb(255, 165, 0), // Orange
+            1 => Color::Red,
+            _ => Color::White,
+        };
+
+        let countdown_text = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                "⚠️  LANGUAGE CHANGE!  ⚠️",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                format!("    {}    ", count),
+                Style::default().fg(color).add_modifier(Modifier::BOLD)
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "(Keep typing!)",
+                Style::default().fg(Color::DarkGray)
+            )),
+            Line::from(""),
+        ];
+        
+        let popup_area = centered_rect(25, 25, size);
+        let popup = Paragraph::new(countdown_text)
+            .alignment(Alignment::Center)
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(color))
+                .style(Style::default().bg(Color::Black)));
+        
+        frame.render_widget(popup, popup_area);
+    }
+
+    fn render_reveal(&self, frame: &mut Frame, progress: f32) {
+        let size = frame.size();
+        
+        // Get the pending language name
+        let lang_name = self.pending_language
+            .as_ref()
+            .map(|l| l.display_name())
+            .unwrap_or("???");
+        
+        let mut lines = vec![];
+        
+        // Add top padding
+        for _ in 0..(size.height / 4) {
+            lines.push(Line::from(""));
+        }
+        
+        // Spinning/slot machine effect for first part of reveal
+        if progress < 0.5 {
+            // Slot machine spinning effect for language only
+            let languages = Language::all();
+            let spin_idx = ((progress * 20.0) as usize) % languages.len();
+            let display_lang = languages[spin_idx].display_name();
+            
+            lines.push(Line::from(Span::styled(
+                "╔════════════════════════════════════════╗",
+                Style::default().fg(Color::Cyan)
+            )));
+            lines.push(Line::from(Span::styled(
+                "║     🎰 LANGUAGE ROULETTE... 🎰        ║",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            )));
+            lines.push(Line::from(Span::styled(
+                "╠════════════════════════════════════════╣",
+                Style::default().fg(Color::Cyan)
+            )));
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![
+                Span::styled("  LANGUAGE: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("[ {} ]", display_lang), Style::default().fg(Color::Magenta).add_modifier(Modifier::RAPID_BLINK)),
+            ]));
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "╚════════════════════════════════════════╝",
+                Style::default().fg(Color::Cyan)
+            )));
+        } else {
+            // Final reveal with dramatic pause
+            let reveal_progress = (progress - 0.5) * 2.0; // 0.0 to 1.0 for second half
+            
+            lines.push(Line::from(Span::styled(
+                "╔════════════════════════════════════════╗",
+                Style::default().fg(Color::Green)
+            )));
+            lines.push(Line::from(Span::styled(
+                "║       🎯 YOUR NEW LANGUAGE! 🎯        ║",
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+            )));
+            lines.push(Line::from(Span::styled(
+                "╠════════════════════════════════════════╣",
+                Style::default().fg(Color::Green)
+            )));
+            lines.push(Line::from(""));
+            
+            // Show language with dramatic effect
+            if reveal_progress > 0.3 {
+                lines.push(Line::from(vec![
+                    Span::styled("  LANGUAGE: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!(">>> {} <<<", lang_name), Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+                ]));
+            } else {
+                lines.push(Line::from(vec![
+                    Span::styled("  LANGUAGE: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled("[ ??? ]", Style::default().fg(Color::DarkGray)),
+                ]));
+            }
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "╚════════════════════════════════════════╝",
+                Style::default().fg(Color::Green)
+            )));
+            
+            if reveal_progress > 0.8 {
+                lines.push(Line::from(""));
+                lines.push(Line::from(Span::styled(
+                    "🚀 GET READY TO CODE! 🚀",
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                )));
+            }
+        }
+        
+        let paragraph = Paragraph::new(lines)
+            .alignment(Alignment::Center);
+
+        frame.render_widget(paragraph, size);
+    }
+
+    fn render_transition(&self, frame: &mut Frame, progress: f32) {
         let size = frame.size();
         let progress = if let AppState::Transitioning(p) = self.state {
             p
