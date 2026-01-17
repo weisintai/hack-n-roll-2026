@@ -3,14 +3,18 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Gauge, Paragraph, Wrap},
     Frame,
 };
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
 
 use crate::languages::{convert_code, Language};
-use crate::problem::{run_tests, Problem, TestResults};
+use crate::problem::{run_tests_on_piston, Problem, TestResults};
 use crate::syntax::SyntaxHighlighter;
+
+// Configuration constants
+const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 45;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppState {
@@ -18,37 +22,103 @@ pub enum AppState {
     Countdown(u8),           // 5, 4, 3, 2, 1
     Transitioning(f32),      // 0.0 to 1.0 progress (glitch effect)
     Revealing(f32),          // 0.0 to 1.0 progress (reveal new language/problem)
-    Results,
+    Compiling(f32),     // 0.0 to 1.0 progress (simulated)
+    Running,            // Executing on Piston
+    Finished(String),   // Final status message
+    Results(TestResults),
+}
+
+#[derive(Debug, Clone)]
+pub enum ExecutionEvent {
+    Log(OutputLine),
+    Finished(TestResults),
+}
+
+#[derive(Debug, Clone)]
+pub struct OutputLine {
+    pub text: String,
+    pub is_error: bool,
 }
 
 /// Generate starter code template for a problem in a specific language
 fn get_starter_code(problem: &Problem, language: Language) -> String {
     let func_name = &problem.function_name;
+    
     match language {
-        Language::Python => format!(
-            "def {}(...):\n    # Write your solution here\n    pass\n",
-            func_name
-        ),
-        Language::JavaScript => format!(
-            "function {}(...) {{\n    // Write your solution here\n    \n}}\n",
-            func_name
-        ),
-        Language::TypeScript => format!(
-            "function {}(...): any {{\n    // Write your solution here\n    \n}}\n",
-            func_name
-        ),
-        Language::Rust => format!(
-            "pub fn {}(...) -> ... {{\n    // Write your solution here\n    todo!()\n}}\n",
-            func_name
-        ),
-        Language::Go => format!(
-            "func {}(...) ... {{\n    // Write your solution here\n    return nil\n}}\n",
-            func_name
-        ),
-        Language::Java => format!(
-            "public ... {}(...) {{\n    // Write your solution here\n    return null;\n}}\n",
-            func_name
-        ),
+        Language::Python => {
+            let args = match problem.id {
+                1 => "nums, target",
+                2 | 4 => "s",
+                3 | 5 => "n",
+                _ => "..."
+            };
+            format!("def {}({}):\n    # Write your solution here\n    pass\n", func_name, args)
+        },
+        Language::JavaScript => {
+            let args = match problem.id {
+                1 => "nums, target",
+                2 | 4 => "s",
+                3 | 5 => "n",
+                _ => "..."
+            };
+            format!("function {}({}) {{\n    // Write your solution here\n    \n}}\n", func_name, args)
+        },
+        Language::TypeScript => {
+            let (args, ret) = match problem.id {
+                1 => ("nums: number[], target: number", "number[]"),
+                2 => ("s: string[]", "void"),
+                3 => ("n: number", "string[]"),
+                4 => ("s: string", "boolean"),
+                5 => ("n: number", "number"),
+                _ => ("...", "any")
+            };
+            format!("function {}({}): {} {{\n    // Write your solution here\n    \n}}\n", func_name, args, ret)
+        },
+        Language::Rust => {
+            let (args, ret) = match problem.id {
+                1 => ("nums: Vec<i32>, target: i32", "Vec<i32>"),
+                2 => ("s: &mut Vec<char>", ""),
+                3 => ("n: i32", "Vec<String>"),
+                4 => ("s: String", "bool"),
+                5 => ("n: i32", "i32"),
+                _ => ("...", "()")
+            };
+            let ret_str = if ret.is_empty() { String::new() } else { format!(" -> {}", ret) };
+            let body = if ret.is_empty() { "" } else { "    todo!()\n" };
+            format!("pub fn {}({}){} {{\n    // Write your solution here\n{}}}\n", func_name, args, ret_str, body)
+        },
+        Language::Go => {
+            let (args, ret) = match problem.id {
+                1 => ("nums []int, target int", "[]int"),
+                2 => ("s []string", ""),
+                3 => ("n int", "[]string"),
+                4 => ("s string", "bool"),
+                5 => ("n int", "int"),
+                _ => ("...", "")
+            };
+            
+            let ret_str = if ret.is_empty() { String::new() } else { format!(" {}", ret) };
+            let return_stmt = match problem.id {
+                1 | 2 | 3 => "    return nil\n",
+                4 => "    return false\n",
+                5 => "    return 0\n",
+                _ => ""
+            };
+            
+            format!("func {}({}){} {{\n    // Write your solution here\n{}}}\n", func_name, args, ret_str, return_stmt)
+        },
+        Language::Java => {
+            let (args, ret, return_stmt) = match problem.id {
+                1 => ("int[] nums, int target", "int[]", "return new int[0];"),
+                2 => ("char[] s", "void", ""),
+                3 => ("int n", "List<String>", "return new ArrayList<>();"),
+                4 => ("String s", "boolean", "return false;"),
+                5 => ("int n", "int", "return 0;"),
+                _ => ("...", "Object", "return null;")
+            };
+            
+            format!("public {} {}({}) {{\n    // Write your solution here\n    {}\n}}\n", ret, func_name, args, return_stmt)
+        },
     }
 }
 
@@ -64,6 +134,12 @@ pub struct App {
     pub scroll_offset: usize,
     pub transition_start: Option<Instant>,
     pub glitch_frame: usize,
+    
+    // Async execution
+    pub output_rx: Option<mpsc::Receiver<ExecutionEvent>>,
+    pub execution_output: Vec<OutputLine>,
+    pub execution_progress: f32,
+    pub show_output_panel: bool,
     pub editor_area: Rect,
     pub countdown_start: Option<Instant>,
     pub pending_language: Option<Language>,
@@ -82,11 +158,15 @@ impl App {
             current_language,
             state: AppState::Coding,
             last_randomize: Instant::now(),
-            randomize_interval: Duration::from_secs(45),
+            randomize_interval: Duration::from_secs(LANGUAGE_CHANGE_INTERVAL_SECS),
             test_results: None,
             scroll_offset: 0,
             transition_start: None,
             glitch_frame: 0,
+            output_rx: None,
+            execution_output: Vec::new(),
+            execution_progress: 0.0,
+            show_output_panel: false,
             editor_area: Rect::default(),
             countdown_start: None,
             pending_language: None,
@@ -97,64 +177,95 @@ impl App {
     pub fn tick(&mut self) {
         self.glitch_frame = (self.glitch_frame + 1) % 10;
 
-        // Check if it's time to start countdown
-        if self.state == AppState::Coding {
-            let elapsed = self.last_randomize.elapsed();
-            // Start countdown 5 seconds before randomize time
-            let countdown_threshold = self.randomize_interval.saturating_sub(Duration::from_secs(5));
-            if elapsed >= countdown_threshold && self.countdown_start.is_none() {
-                self.start_countdown();
-            }
-        }
-
-        // Update countdown
-        if let AppState::Countdown(count) = self.state {
-            if let Some(start) = self.countdown_start {
-                let elapsed = start.elapsed().as_secs_f32();
-                let new_count = (5.0 - elapsed.floor()).max(0.0) as u8;
-                
-                if new_count == 0 || elapsed >= 5.0 {
-                    self.start_transition();
-                } else if new_count != count {
-                    self.state = AppState::Countdown(new_count);
+        match self.state {
+            AppState::Coding => {
+                let elapsed = self.last_randomize.elapsed();
+                // Start countdown 5 seconds before randomize time
+                let countdown_threshold = self.randomize_interval.saturating_sub(Duration::from_secs(5));
+                if elapsed >= countdown_threshold && self.countdown_start.is_none() {
+                    self.start_countdown();
                 }
             }
-        }
-
-        // Update transition progress
-        if let AppState::Transitioning(_progress) = self.state {
-            if let Some(start) = self.transition_start {
-                let elapsed = start.elapsed().as_secs_f32();
-                let new_progress = (elapsed / 1.5).min(1.0); // 1.5 second transition
-                
-                if new_progress >= 1.0 {
-                    self.start_reveal();
+            AppState::Countdown(count) => {
+                if let Some(start) = self.countdown_start {
+                    let elapsed = start.elapsed().as_secs_f32();
+                    let new_count = (5.0 - elapsed.floor()).max(0.0) as u8;
+                    
+                    if new_count == 0 || elapsed >= 5.0 {
+                        self.start_transition();
+                    } else if new_count != count {
+                        self.state = AppState::Countdown(new_count);
+                    }
+                }
+            }
+            AppState::Transitioning(_progress) => {
+                if let Some(start) = self.transition_start {
+                    let elapsed = start.elapsed().as_secs_f32();
+                    let new_progress = (elapsed / 1.5).min(1.0); // 1.5s transition
+                    
+                    if new_progress >= 1.0 {
+                        self.start_reveal();
+                    } else {
+                        self.state = AppState::Transitioning(new_progress);
+                    }
+                }
+            }
+            AppState::Revealing(_progress) => {
+                if let Some(start) = self.transition_start {
+                    let elapsed = start.elapsed().as_secs_f32();
+                    let new_progress = (elapsed / 3.0).min(1.0); // 3s reveal
+                    
+                    if new_progress >= 1.0 {
+                        self.complete_transition();
+                    } else {
+                        self.state = AppState::Revealing(new_progress);
+                    }
+                }
+            }
+            AppState::Compiling(mut progress) => {
+                // Simulate compilation progress
+                progress += 0.02;
+                if progress >= 1.0 {
+                    self.state = AppState::Running;
+                    self.execution_progress = 0.0;
                 } else {
-                    self.state = AppState::Transitioning(new_progress);
+                    self.state = AppState::Compiling(progress);
                 }
             }
+            _ => {}
+        }
+    }
+    pub fn poll_execution(&mut self) {
+        let mut should_close = false;
+        if let Some(rx) = &mut self.output_rx {
+            while let Ok(event) = rx.try_recv() {
+                match event {
+                    ExecutionEvent::Log(line) => {
+                        self.execution_output.push(line);
+                        // Auto-scroll
+                        if self.execution_output.len() > 10 {
+                           self.scroll_offset = self.execution_output.len() - 10;
+                        }
+                    }
+                    ExecutionEvent::Finished(results) => {
+                        self.test_results = Some(results.clone());
+                        self.state = AppState::Results(results);
+                        should_close = true;
+                    }
+                }
+            }
+        }
+        
+        if should_close {
+            self.output_rx = None;
         }
 
-        // Update reveal progress
-        if let AppState::Revealing(_progress) = self.state {
-            if let Some(start) = self.transition_start {
-                let elapsed = start.elapsed().as_secs_f32();
-                let new_progress = (elapsed / 2.0).min(1.0); // 2 second reveal
-                
-                if new_progress >= 1.0 {
-                    self.complete_transition();
-                } else {
-                    self.state = AppState::Revealing(new_progress);
-                }
-            }
-        }
     }
 
     fn start_countdown(&mut self) {
         self.countdown_start = Some(Instant::now());
         self.state = AppState::Countdown(5);
-        
-        // Pre-calculate the new language only (problem stays the same)
+        // Pre-select new language now so we can show it during reveal
         self.pending_language = Some(self.current_language.random_except());
     }
 
@@ -173,7 +284,7 @@ impl App {
         if let Some(new_lang) = self.pending_language.take() {
             self.code = convert_code(&self.code, self.current_language, new_lang);
             self.current_language = new_lang;
-        }
+        } 
         
         // Clear any pending problem (not used in auto-transition)
         self.pending_problem = None;
@@ -188,8 +299,9 @@ impl App {
     pub fn handle_key(&mut self, key: KeyEvent) {
         match self.state {
             AppState::Coding | AppState::Countdown(_) => self.handle_coding_key(key),
-            AppState::Results => self.handle_results_key(key),
-            AppState::Transitioning(_) | AppState::Revealing(_) => {}, // No input during transition
+            AppState::Results(_) => self.handle_results_key(key),
+            AppState::Finished(_) => self.handle_finished_key(key),
+             _ => {}, // Ignore input during transitions and execution
         }
     }
 
@@ -228,6 +340,11 @@ impl App {
                 KeyCode::Char('r') | KeyCode::Char('R') => {
                     self.randomize_problem();
                     return;
+                }
+                // Cmd+R or Ctrl+C to run (show output)
+                KeyCode::Char('c') | KeyCode::Char('C') => {
+                    self.show_output_panel = true;
+                    self.run_code();
                 }
                 // Cmd/Ctrl+A: move to start of line (like bash/zsh)
                 KeyCode::Char('a') | KeyCode::Char('A') => {
@@ -369,6 +486,16 @@ impl App {
             _ => {}
         }
     }
+
+    fn handle_finished_key(&mut self, key: KeyEvent) {
+         match key.code {
+            KeyCode::Enter | KeyCode::Esc => {
+                 self.state = AppState::Coding; // Return to editor on error/finish without results
+            }
+            _ => {}
+         }
+    }
+
 
     pub fn handle_mouse(&mut self, mouse: MouseEvent) {
         if self.state != AppState::Coding {
@@ -540,6 +667,32 @@ impl App {
             }
             self.cursor_position = new_pos;
         }
+    }
+
+    fn run_code(&mut self) {
+        self.execution_output.clear();
+        self.execution_output.push(OutputLine { 
+            text: "Running code on Piston API...".to_string(), 
+            is_error: false 
+        });
+
+        let (tx, rx) = mpsc::channel(32);
+        self.output_rx = Some(rx);
+        
+        // Clone data for async task
+        let code = self.code.clone();
+        let problem = self.problem.clone();
+        let language = self.current_language;
+        
+        // Spawn async execution (don't change state to Results)
+        tokio::spawn(async move {
+             let _results = run_tests_on_piston(code, problem, language, tx.clone()).await;
+             // Just log completion, don't send Results event
+             let _ = tx.send(ExecutionEvent::Log(OutputLine {
+                 text: "Execution completed.".to_string(),
+                 is_error: false
+             })).await;
+        });
     }
 
     fn move_to_line_start(&mut self) {
@@ -729,16 +882,28 @@ impl App {
     }
 
     fn submit(&mut self) {
-        // Convert to Python and run tests
-        let python_code = if self.current_language != Language::Python {
-            convert_code(&self.code, self.current_language, Language::Python)
-        } else {
-            self.code.clone()
-        };
+        self.state = AppState::Compiling(0.0);
+        self.execution_output.clear();
+        self.execution_output.push(OutputLine { 
+            text: "Compiling and sending to Piston API...".to_string(), 
+            is_error: false 
+        });
 
-        let results = run_tests(&python_code, &self.problem);
-        self.test_results = Some(results);
-        self.state = AppState::Results;
+        let (tx, rx) = mpsc::channel(32);
+        self.output_rx = Some(rx);
+        
+        // Clone data for async task
+        let code = self.code.clone();
+        let problem = self.problem.clone();
+        let language = self.current_language;
+        
+        // Spawn async token
+        tokio::spawn(async move {
+             let results = run_tests_on_piston(code, problem, language, tx.clone()).await;
+             
+             // Send results
+             let _ = tx.send(ExecutionEvent::Finished(results)).await;
+        });
     }
 
     pub fn render(&mut self, frame: &mut Frame) {
@@ -747,37 +912,111 @@ impl App {
             AppState::Countdown(count) => self.render_countdown(frame, *count),
             AppState::Transitioning(progress) => self.render_transition(frame, *progress),
             AppState::Revealing(progress) => self.render_reveal(frame, *progress),
-            AppState::Results => self.render_results(frame),
+            AppState::Compiling(progress) => self.render_compiling(frame, *progress),
+            AppState::Running => self.render_running(frame),
+            AppState::Finished(msg) => self.render_finished(frame, msg),
+            AppState::Results(results) => self.render_results(frame, results),
         }
     }
+    
+    fn render_compiling(&self, frame: &mut Frame, progress: f32) {
+        let size = frame.size();
+        let area = centered_rect(60, 20, size);
+        
+        let gauge = Gauge::default()
+            .block(Block::default().borders(Borders::ALL).title(" Compiling "))
+            .gauge_style(Style::default().fg(Color::Cyan))
+            .percent((progress * 100.0) as u16);
+            
+        frame.render_widget(gauge, area);
+    }
+
+    fn render_running(&self, frame: &mut Frame) {
+        let size = frame.size();
+        let area = centered_rect(80, 60, size);
+        
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Executing on Piston Container ")
+            .border_style(Style::default().fg(Color::Yellow));
+            
+        let inner_area = block.inner(area);
+        frame.render_widget(block, area);
+
+        let lines: Vec<Line> = self.execution_output.iter().map(|line| {
+            Line::from(Span::styled(
+                &line.text, 
+                if line.is_error { Style::default().fg(Color::Red) } else { Style::default().fg(Color::White) }
+            ))
+        }).collect();
+        
+        let paragraph = Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .scroll((self.scroll_offset as u16, 0));
+            
+        frame.render_widget(paragraph, inner_area);
+    }
+
+    fn render_finished(&self, frame: &mut Frame, msg: &str) {
+         let size = frame.size();
+        let area = centered_rect(60, 20, size);
+        
+        let text = vec![
+            Line::from(Span::styled("Execution Finished", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))),
+            Line::from(""),
+            Line::from(msg),
+            Line::from(""),
+            Line::from(Span::styled("Press Enter to continue", Style::default().fg(Color::DarkGray))),
+        ];
+        
+        let p = Paragraph::new(text)
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Green)))
+            .alignment(Alignment::Center);
+            
+        frame.render_widget(p, area);
+    }
+
 
     fn render_coding(&mut self, frame: &mut Frame) {
         let size = frame.size();
         
-        // Main layout: header + content
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),  // Header
-                Constraint::Min(0),     // Content
-                Constraint::Length(2),  // Footer
-            ])
-            .split(size);
+        // Main layout: header + content + footer
+        let main_chunks = if self.show_output_panel {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(3),   // Header
+                    Constraint::Min(10),     // Content (problem + editor)
+                    Constraint::Length(12),  // Output panel
+                    Constraint::Length(2),   // Footer
+                ])
+                .split(size)
+        } else {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(3),  // Header
+                    Constraint::Min(0),     // Content
+                    Constraint::Length(2),  // Footer
+                ])
+                .split(size)
+        };
 
         // Header with arcade styling
-        self.render_header(frame, chunks[0]);
+        self.render_header(frame, main_chunks[0]);
 
         // Split content: 1/3 problem, 2/3 editor
+        let content_area = if self.show_output_panel { main_chunks[1] } else { main_chunks[1] };
         let content_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
                 Constraint::Percentage(33),
                 Constraint::Percentage(67),
             ])
-            .split(chunks[1]);
+            .split(content_area);
 
         // Store editor area for mouse clicks
-        self.editor_area = content_chunks[1];
+        self.editor_area = content_area;
 
         // Render problem description
         self.render_problem(frame, content_chunks[0]);
@@ -785,8 +1024,14 @@ impl App {
         // Render code editor
         self.render_editor(frame, content_chunks[1]);
 
+        // Render output panel if visible
+        if self.show_output_panel {
+            self.render_output_panel(frame, main_chunks[2]);
+        }
+
         // Footer with timer
-        self.render_footer(frame, chunks[2]);
+        let footer_idx = if self.show_output_panel { 3 } else { 2 };
+        self.render_footer(frame, main_chunks[footer_idx]);
     }
 
     fn render_header(&self, frame: &mut Frame, area: Rect) {
@@ -937,6 +1182,33 @@ impl App {
         frame.render_widget(paragraph, area);
     }
 
+    fn render_output_panel(&self, frame: &mut Frame, area: Rect) {
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Output (Cmd+R to run) ")
+            .border_style(Style::default().fg(Color::Green));
+            
+        let inner_area = block.inner(area);
+        frame.render_widget(block, area);
+
+        let lines: Vec<Line> = self.execution_output.iter().map(|line| {
+            Line::from(Span::styled(
+                &line.text, 
+                if line.is_error { 
+                    Style::default().fg(Color::Red) 
+                } else { 
+                    Style::default().fg(Color::White) 
+                }
+            ))
+        }).collect();
+        
+        let paragraph = Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .scroll((self.scroll_offset as u16, 0));
+            
+        frame.render_widget(paragraph, inner_area);
+    }
+
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
         let elapsed = self.last_randomize.elapsed();
         let remaining = self.randomize_interval.saturating_sub(elapsed);
@@ -950,7 +1222,7 @@ impl App {
             Color::Green
         };
 
-        let footer_text = vec![
+        let mut footer_spans = vec![
             Span::styled("⏱ ", Style::default().fg(Color::Cyan)),
             Span::styled(format!("{}s", secs), Style::default().fg(timer_color).add_modifier(Modifier::BOLD)),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
@@ -966,14 +1238,24 @@ impl App {
             Span::styled("Alt+←/→ ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::styled("Word", Style::default().fg(Color::White)),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+            Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Cmd+C ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled("Compile", Style::default().fg(Color::White)),
+            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
             Span::styled("^Q ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
             Span::styled("Quit", Style::default().fg(Color::White)),
         ];
+        
+        if self.show_output_panel {
+            footer_spans.push(Span::styled("Run", Style::default().fg(Color::White)));
+        } else {
+            footer_spans.push(Span::styled("Run & Show Output", Style::default().fg(Color::White)));
+        }
 
-        let footer = Paragraph::new(Line::from(footer_text))
+        let footer = Paragraph::new(Line::from(footer_spans))
             .alignment(Alignment::Center)
             .style(Style::default().bg(Color::Black));
-
+        
         frame.render_widget(footer, area);
     }
 
@@ -1180,18 +1462,17 @@ impl App {
         frame.render_widget(popup, popup_area);
     }
 
-    fn render_results(&self, frame: &mut Frame, ) {
+    fn render_results(&self, frame: &mut Frame, results: &TestResults) {
         let size = frame.size();
         
-        if let Some(results) = &self.test_results {
-            let score_percent = (results.passed as f32 / results.total as f32 * 100.0) as u8;
-            let score_color = if score_percent >= 80 {
-                Color::Green
-            } else if score_percent >= 50 {
-                Color::Yellow
-            } else {
-                Color::Red
-            };
+        let score_percent = (results.passed as f32 / results.total as f32 * 100.0) as u8;
+        let score_color = if score_percent >= 80 {
+            Color::Green
+        } else if score_percent >= 50 {
+            Color::Yellow
+        } else {
+            Color::Red
+        };
 
             let mut text = vec![
                 Line::from(""),
@@ -1247,7 +1528,6 @@ impl App {
                 .wrap(Wrap { trim: false });
 
             frame.render_widget(paragraph, size);
-        }
     }
 }
 

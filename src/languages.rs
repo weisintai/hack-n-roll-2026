@@ -29,7 +29,14 @@ impl Language {
             .into_iter()
             .filter(|l| l != self)
             .collect();
-        *others.choose(&mut rng).unwrap()
+        
+        // If no other languages available, return self or a random from all
+        if others.is_empty() {
+            // If only one language total, just return it
+            Language::all().first().copied().unwrap_or(*self)
+        } else {
+            *others.choose(&mut rng).unwrap()
+        }
     }
 
     pub fn as_str(&self) -> &'static str {
@@ -92,19 +99,7 @@ function twoSum(nums, target) {{
 
 fn mock_convert_to_ts(_code: &str) -> String {
     format!(
-        r#"// TypeScript conversion
-function twoSum(nums: number[], target: number): number[] {{
-    const map = new Map<number, number>();
-    for (let i = 0; i < nums.length; i++) {{
-        const complement = target - nums[i];
-        if (map.has(complement)) {{
-            return [map.get(complement)!, i];
-        }}
-        map.set(nums[i], i);
-    }}
-    return [];
-}}
-"#
+        "// TypeScript conversion\nfunction twoSum(nums: number[], target: number): number[] {{\n    const map = new Map<number, number>();\n    for (let i = 0; i < nums.length; i++) {{\n        const complement = target - nums[i];\n        if (map.has(complement)) {{\n            return [map.get(complement)!, i];\n        }}\n        map.set(nums[i], i);\n    }}\n    return [];\n}}\n"
     )
 }
 
@@ -164,17 +159,17 @@ func twoSum(nums []int, target int) []int {{
 fn mock_convert_to_java(_code: &str) -> String {
     format!(
         r#"// Java conversion
-public int[] twoSum(int[] nums, int target) {{
-    Map<Integer, Integer> map = new HashMap<>();
-    for (int i = 0; i < nums.length; i++) {{
-        int complement = target - nums[i];
-        if (map.containsKey(complement)) {{
-            return new int[] {{ map.get(complement), i }};
+    public int[] twoSum(int[] nums, int target) {{
+        Map<Integer, Integer> map = new HashMap<>();
+        for (int i = 0; i < nums.length; i++) {{
+            int complement = target - nums[i];
+            if (map.containsKey(complement)) {{
+                return new int[] {{ map.get(complement), i }};
+            }}
+            map.put(nums[i], i);
         }}
-        map.put(nums[i], i);
+        return new int[] {{}};
     }}
-    return new int[] {{}};
-}}
 "#
     )
 }
