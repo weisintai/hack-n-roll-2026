@@ -9,12 +9,13 @@ use ratatui::{
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
-use crate::languages::{convert_code, Language};
+use crate::languages::{build_translation_prompt, Language};
+use crate::llm;
 use crate::problem::{run_tests_on_piston, Problem, TestResults};
 use crate::syntax::SyntaxHighlighter;
 
 // Configuration constants
-const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 45;
+const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 15;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppState {
@@ -32,6 +33,12 @@ pub enum AppState {
 pub enum ExecutionEvent {
     Log(OutputLine),
     Finished(TestResults),
+}
+
+#[derive(Debug, Clone)]
+pub enum TranslationEvent {
+    Success(String),
+    Failure(String),
 }
 
 #[derive(Debug, Clone)]
@@ -144,6 +151,8 @@ pub struct App {
     pub countdown_start: Option<Instant>,
     pub pending_language: Option<Language>,
     pub pending_problem: Option<Problem>,
+    pub translation_rx: Option<mpsc::Receiver<TranslationEvent>>,
+    pub pending_translation: Option<TranslationEvent>,
 }
 
 impl App {
@@ -171,6 +180,8 @@ impl App {
             countdown_start: None,
             pending_language: None,
             pending_problem: None,
+            translation_rx: None,
+            pending_translation: None,
         }
     }
 
@@ -216,7 +227,13 @@ impl App {
                     let new_progress = (elapsed / 3.0).min(1.0); // 3s reveal
                     
                     if new_progress >= 1.0 {
-                        self.complete_transition();
+                        if self.translation_ready() {
+                            self.complete_transition();
+                        } else {
+                            // Keep the reveal animation looping until translation finishes
+                            self.transition_start = Some(Instant::now());
+                            self.state = AppState::Revealing(0.0);
+                        }
                     } else {
                         self.state = AppState::Revealing(new_progress);
                     }
@@ -262,6 +279,55 @@ impl App {
 
     }
 
+    pub fn poll_translation(&mut self) {
+        let mut completed = None;
+        if let Some(rx) = &mut self.translation_rx {
+            while let Ok(event) = rx.try_recv() {
+                completed = Some(event);
+            }
+        }
+
+        if let Some(event) = completed {
+            self.pending_translation = Some(event);
+            self.translation_rx = None;
+        }
+    }
+
+    fn translation_ready(&self) -> bool {
+        self.pending_translation.is_some()
+    }
+
+    fn start_llm_translation(&mut self) {
+        self.pending_translation = None;
+        self.translation_rx = None;
+
+        let target_language = match self.pending_language {
+            Some(lang) => lang,
+            None => return,
+        };
+
+        let code = self.code.clone();
+        let from = self.current_language;
+        let to = target_language;
+        if from == to {
+            self.pending_translation = Some(TranslationEvent::Success(code));
+            return;
+        }
+
+        let prompt = build_translation_prompt(&code, from, to);
+        let (tx, rx) = mpsc::channel(1);
+        self.translation_rx = Some(rx);
+
+        tokio::spawn(async move {
+            let result = llm::translate_code(&prompt).await;
+            let event = match result {
+                Ok(translated) => TranslationEvent::Success(translated),
+                Err(err) => TranslationEvent::Failure(err.to_string()),
+            };
+            let _ = tx.send(event).await;
+        });
+    }
+
     fn start_countdown(&mut self) {
         self.countdown_start = Some(Instant::now());
         self.state = AppState::Countdown(5);
@@ -272,6 +338,7 @@ impl App {
     fn start_transition(&mut self) {
         self.transition_start = Some(Instant::now());
         self.state = AppState::Transitioning(0.0);
+        self.start_llm_translation();
     }
 
     fn start_reveal(&mut self) {
@@ -282,12 +349,23 @@ impl App {
     fn complete_transition(&mut self) {
         // Apply the pending language only (keep the same problem)
         if let Some(new_lang) = self.pending_language.take() {
-            self.code = convert_code(&self.code, self.current_language, new_lang);
+            if let Some(result) = self.pending_translation.take() {
+                match result {
+                    TranslationEvent::Success(translated) => {
+                        self.code = translated;
+                    }
+                    TranslationEvent::Failure(_) => {
+                        // Keep the existing code if translation fails
+                    }
+                }
+            }
             self.current_language = new_lang;
         } 
         
         // Clear any pending problem (not used in auto-transition)
         self.pending_problem = None;
+        self.translation_rx = None;
+        self.pending_translation = None;
         
         // Reset timer and state
         self.last_randomize = Instant::now();

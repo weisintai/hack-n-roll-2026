@@ -62,114 +62,40 @@ impl Language {
     }
 }
 
-/// Mock code converter - in production, this would call an LLM API
-pub fn convert_code(code: &str, from: Language, to: Language) -> String {
-    if from == to {
-        return code.to_string();
+pub fn build_translation_prompt(code: &str, from: Language, to: Language) -> String {
+    let mut extra_rules = String::new();
+
+    if from == Language::Python && to != Language::Python {
+        extra_rules.push_str(
+            r#"
+PYTHON->BRACES RULE:
+- Reconstruct { } blocks based on indentation levels.
+- When indentation increases, open a new block; when it decreases, close blocks.
+- Do not change control flow; only map indentation to braces."#,
+        );
     }
 
-    // Mock conversion - just wrap the code with language-specific syntax
-    match to {
-        Language::JavaScript => mock_convert_to_js(code),
-        Language::TypeScript => mock_convert_to_ts(code),
-        Language::Python => mock_convert_to_python(code),
-        Language::Rust => mock_convert_to_rust(code),
-        Language::Go => mock_convert_to_go(code),
-        Language::Java => mock_convert_to_java(code),
-    }
-}
-
-fn mock_convert_to_js(_code: &str) -> String {
     format!(
-        r#"// JavaScript conversion
-function twoSum(nums, target) {{
-    const map = new Map();
-    for (let i = 0; i < nums.length; i++) {{
-        const complement = target - nums[i];
-        if (map.has(complement)) {{
-            return [map.get(complement), i];
-        }}
-        map.set(nums[i], i);
-    }}
-    return [];
-}}
-"#
-    )
-}
+        r#"You are a code translator that performs LITERAL translations.
 
-fn mock_convert_to_ts(_code: &str) -> String {
-    format!(
-        "// TypeScript conversion\nfunction twoSum(nums: number[], target: number): number[] {{\n    const map = new Map<number, number>();\n    for (let i = 0; i < nums.length; i++) {{\n        const complement = target - nums[i];\n        if (map.has(complement)) {{\n            return [map.get(complement)!, i];\n        }}\n        map.set(nums[i], i);\n    }}\n    return [];\n}}\n"
-    )
-}
+CRITICAL RULES:
+1. DO NOT fix bugs - translate the code exactly as-is, including any bugs
+2. DO NOT complete unfinished code - if code is incomplete, keep it incomplete
+3. DO NOT add any code not in the original
+4. Preserve incomplete variable names (e.g., "let fo" should stay as a partial declaration)
+5. This is LIVE typing - the code is intentionally incomplete and being actively typed
+6. Preserve the exact structure, even if it's syntactically invalid
+7. If a line is cut off mid-word, translate the complete words and keep the partial word as-is
+{}
 
-fn mock_convert_to_python(_code: &str) -> String {
-    format!(
-        r#"# Python conversion
-def two_sum(nums, target):
-    num_map = {{}}
-    for i, num in enumerate(nums):
-        complement = target - num
-        if complement in num_map:
-            return [num_map[complement], i]
-        num_map[num] = i
-    return []
-"#
-    )
-}
+Translate this {} code to {}:
 
-fn mock_convert_to_rust(_code: &str) -> String {
-    format!(
-        r#"// Rust conversion
-use std::collections::HashMap;
+{}
 
-pub fn two_sum(nums: Vec<i32>, target: i32) -> Vec<i32> {{
-    let mut map = HashMap::new();
-    for (i, &num) in nums.iter().enumerate() {{
-        let complement = target - num;
-        if let Some(&j) = map.get(&complement) {{
-            return vec![j as i32, i as i32];
-        }}
-        map.insert(num, i);
-    }}
-    vec![]
-}}
-"#
-    )
-}
-
-fn mock_convert_to_go(_code: &str) -> String {
-    format!(
-        r#"// Go conversion
-func twoSum(nums []int, target int) []int {{
-    m := make(map[int]int)
-    for i, num := range nums {{
-        complement := target - num
-        if j, ok := m[complement]; ok {{
-            return []int{{j, i}}
-        }}
-        m[num] = i
-    }}
-    return []int{{}}
-}}
-"#
-    )
-}
-
-fn mock_convert_to_java(_code: &str) -> String {
-    format!(
-        r#"// Java conversion
-    public int[] twoSum(int[] nums, int target) {{
-        Map<Integer, Integer> map = new HashMap<>();
-        for (int i = 0; i < nums.length; i++) {{
-            int complement = target - nums[i];
-            if (map.containsKey(complement)) {{
-                return new int[] {{ map.get(complement), i }};
-            }}
-            map.put(nums[i], i);
-        }}
-        return new int[] {{}};
-    }}
-"#
+Output ONLY the translated code, no markdown formatting, no explanations, no code fences."#,
+        extra_rules,
+        from.display_name(),
+        to.display_name(),
+        code
     )
 }
