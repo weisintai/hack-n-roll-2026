@@ -127,6 +127,80 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
             
             format!("public {} {}({}) {{\n    // Write your solution here\n    {}\n}}\n", ret, func_name, args, return_stmt)
         },
+        Language::Haskell => {
+            let (args, ret) = match problem.id {
+                1 => ("nums target", "[Int] -> Int -> [Int]"),
+                2 => ("s", "[Char] -> [Char]"),
+                3 => ("n", "Int -> [String]"),
+                4 => ("s", "String -> Bool"),
+                5 => ("n", "Int -> Int"),
+                _ => ("...", "a -> b")
+            };
+            format!("{} :: {}\n{} {} = \n    -- Write your solution here\n    undefined\n", func_name, ret, func_name, args)
+        },
+        Language::Lua => {
+            let args = match problem.id {
+                1 => "nums, target",
+                2 | 4 => "s",
+                3 | 5 => "n",
+                _ => "..."
+            };
+            format!("function {}({})\n    -- Write your solution here\n    \nend\n", func_name, args)
+        },
+        Language::OCaml => {
+            let (args, ret) = match problem.id {
+                1 => ("nums target", "int list -> int -> int list"),
+                2 => ("s", "char list -> char list"),
+                3 => ("n", "int -> string list"),
+                4 => ("s", "string -> bool"),
+                5 => ("n", "int -> int"),
+                _ => ("...", "'a -> 'b")
+            };
+            format!("let {} {} : {} =\n  (* Write your solution here *)\n  failwith \"Not implemented\"\n", func_name, args, ret)
+        },
+        Language::Elixir => {
+            let args = match problem.id {
+                1 => "nums, target",
+                2 | 4 => "s",
+                3 | 5 => "n",
+                _ => "..."
+            };
+            format!("def {}({}) do\n  # Write your solution here\n  \nend\n", func_name, args)
+        },
+        Language::Kotlin => {
+            let (args, ret, return_stmt) = match problem.id {
+                1 => ("nums: IntArray, target: Int", "IntArray", "return intArrayOf()"),
+                2 => ("s: CharArray", "Unit", ""),
+                3 => ("n: Int", "List<String>", "return emptyList()"),
+                4 => ("s: String", "Boolean", "return false"),
+                5 => ("n: Int", "Int", "return 0"),
+                _ => ("...", "Any", "return null")
+            };
+            let ret_prefix = if ret == "Unit" { "" } else { ": " };
+            let body = if return_stmt.is_empty() { 
+                "    // Write your solution here\n".to_string() 
+            } else { 
+                format!("    // Write your solution here\n    {}\n", return_stmt)
+            };
+            format!("fun {}({}){}{} {{\n{}}}\n", func_name, args, ret_prefix, ret, body)
+        },
+        Language::Swift => {
+            let (args, ret, return_stmt) = match problem.id {
+                1 => ("_ nums: [Int], _ target: Int", "[Int]", "return []"),
+                2 => ("_ s: inout [Character]", "Void", ""),
+                3 => ("_ n: Int", "[String]", "return []"),
+                4 => ("_ s: String", "Bool", "return false"),
+                5 => ("_ n: Int", "Int", "return 0"),
+                _ => ("...", "Any", "return nil")
+            };
+            let ret_str = if ret == "Void" { String::new() } else { format!(" -> {}", ret) };
+            let body = if return_stmt.is_empty() {
+                "    // Write your solution here\n".to_string()
+            } else {
+                format!("    // Write your solution here\n    {}\n", return_stmt)
+            };
+            format!("func {}({}){} {{\n{}}}\n", func_name, args, ret_str, body)
+        },
     }
 }
 
@@ -1175,7 +1249,7 @@ impl App {
         let mut cursor_col = 0;
         let mut char_count = 0;
         
-        for (line_idx, line) in self.code.lines().enumerate() {
+        for (line_idx, line) in self.code.split('\n').enumerate() {
             let line_len = line.len() + 1; // +1 for newline
             if char_count + line_len > self.cursor_position {
                 cursor_line = line_idx;
@@ -1186,7 +1260,7 @@ impl App {
         }
         
         // Render lines with syntax highlighting and cursor
-        let lines: Vec<Line> = self.code.lines().enumerate().map(|(i, line)| {
+        let lines: Vec<Line> = self.code.split('\n').enumerate().map(|(i, line)| {
             let line_num = format!("{:>3} ", i + 1);
             let mut spans = vec![
                 Span::styled(line_num, Style::default().fg(Color::DarkGray)),

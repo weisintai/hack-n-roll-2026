@@ -9,6 +9,12 @@ pub enum Language {
     Rust,
     Go,
     Java,
+    Haskell,
+    Lua,
+    OCaml,
+    Elixir,
+    Kotlin,
+    Swift,
 }
 
 impl Language {
@@ -20,6 +26,12 @@ impl Language {
             Language::Rust,
             Language::Go,
             Language::Java,
+            Language::Haskell,
+            Language::Lua,
+            Language::OCaml,
+            Language::Elixir,
+            Language::Kotlin,
+            Language::Swift,
         ]
     }
 
@@ -47,6 +59,12 @@ impl Language {
             Language::Rust => "Rust",
             Language::Go => "Go",
             Language::Java => "Java",
+            Language::Haskell => "Haskell",
+            Language::Lua => "Lua",
+            Language::OCaml => "OCaml",
+            Language::Elixir => "Elixir",
+            Language::Kotlin => "Kotlin",
+            Language::Swift => "Swift",
         }
     }
 }
@@ -54,9 +72,94 @@ impl Language {
 pub fn build_translation_prompt(code: &str, from: Language, to: Language) -> String {
     let mut extra_rules = String::new();
 
+    // Add target language specific syntax rules
+    match to {
+        Language::Elixir => {
+            extra_rules.push_str(
+                r#"
+
+TARGET LANGUAGE SYNTAX (Elixir):
+- Functions are called with Module.function(args), NOT object.method() style
+- String reversal: String.reverse(s)
+- List operations: Enum.map(list, fn), List.first(list)
+- Pattern matching: case value do ... end
+- Pipe operator: value |> function() for chaining
+Example: s |> String.reverse() or String.reverse(s)"#,
+            );
+        }
+        Language::Kotlin => {
+            extra_rules.push_str(
+                r#"
+
+TARGET LANGUAGE SYNTAX (Kotlin):
+- String reversal: s.reversed()
+- Array operations: array.map { }, array.filter { }
+- Constructors: ClassName() or arrayOf(), listOf()
+- Extension functions: value.function() NOT ClassName.new()
+- When expression: when (value) { ... }
+Example: val result = s.reversed()"#,
+            );
+        }
+        Language::Swift => {
+            extra_rules.push_str(
+                r#"
+
+TARGET LANGUAGE SYNTAX (Swift):
+- String reversal: String(s.reversed())
+- Array operations: array.map { }, array.filter { }
+- Constructors: ClassName() or []
+- Optional handling: value ?? default, if let, guard let
+- Switch: switch value { case ... }
+Example: let result = String(s.reversed())"#,
+            );
+        }
+        Language::Haskell => {
+            extra_rules.push_str(
+                r#"
+
+TARGET LANGUAGE SYNTAX (Haskell):
+- Function application: function arg, NOT function(arg)
+- List operations: map, filter, reverse, etc.
+- Pattern matching: case expr of ...
+- String is [Char], so reverse works directly
+- Function composition: f . g
+Example: reverse s"#,
+            );
+        }
+        Language::Lua => {
+            extra_rules.push_str(
+                r#"
+
+TARGET LANGUAGE SYNTAX (Lua):
+- Functions: function name(args) ... end
+- String operations: string.reverse(s), string.sub()
+- Tables (arrays): {1, 2, 3}, use ipairs() to iterate
+- Conditionals: if condition then ... end
+- Loops: for i = 1, n do ... end
+Example: string.reverse(s)"#,
+            );
+        }
+        Language::OCaml => {
+            extra_rules.push_str(
+                r#"
+
+TARGET LANGUAGE SYNTAX (OCaml):
+- Function application: function arg, NOT function(arg)
+- String operations: String.reverse, String.concat
+- List operations: List.map, List.filter, List.rev
+- Pattern matching: match expr with | pattern -> result
+- Let bindings: let name = value in ...
+Example: String.reverse s or List.rev s"#,
+            );
+        }
+        _ => {}
+    }
+
+    // Handle source language specific conversions
     if from == Language::Python && to != Language::Python {
         extra_rules.push_str(
             r#"
+
 PYTHON->BRACES RULE:
 - Reconstruct { } blocks based on indentation levels.
 - When indentation increases, open a new block; when it decreases, close blocks.
@@ -65,24 +168,29 @@ PYTHON->BRACES RULE:
     }
 
     format!(
-        r#"You are a code translator that performs LITERAL translations.
+        r#"You are a code translator that converts code from one language to another.
 
 CRITICAL RULES:
-1. DO NOT fix bugs - translate the code exactly as-is, including any bugs
-2. DO NOT complete unfinished code - if code is incomplete, keep it incomplete
-3. DO NOT add any code not in the original
-4. Preserve incomplete variable names (e.g., "let fo" should stay as a partial declaration)
-5. This is LIVE typing - the code is intentionally incomplete and being actively typed
-6. Preserve the exact structure, even if it's syntactically invalid
-7. If a line is cut off mid-word, translate the complete words and keep the partial word as-is
+1. PRESERVE LOGIC: Keep the same algorithmic logic and structure
+2. USE VALID SYNTAX: You MUST use syntactically correct {} syntax
+3. DO NOT fix bugs - translate bugs as-is (but with valid syntax)
+4. DO NOT complete unfinished code - if incomplete, keep it incomplete
+5. DO NOT add any code not in the original
+6. This is LIVE typing - code may be intentionally incomplete
+7. Preserve incomplete lines as-is (e.g., "let fo" stays "let fo")
 {}
+
+IMPORTANT: "Literal" means preserve the LOGIC and INTENT, NOT copy syntax from the source language.
+You must translate to IDIOMATIC {} syntax while preserving the original structure and incompleteness.
 
 Translate this {} code to {}:
 
 {}
 
 Output ONLY the translated code, no markdown formatting, no explanations, no code fences."#,
+        to.display_name(),
         extra_rules,
+        to.display_name(),
         from.display_name(),
         to.display_name(),
         code

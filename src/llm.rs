@@ -46,10 +46,10 @@ pub async fn translate_code(prompt: &str) -> Result<String> {
             }
         ],
         "generationConfig": {
-            "temperature": 0.0,
+            "temperature": 0.1,
             "maxOutputTokens": 4096,
             "thinkingConfig": {
-                "thinkingLevel": "minimal"
+                "thinkingLevel": "low"
             }
         }
     });
