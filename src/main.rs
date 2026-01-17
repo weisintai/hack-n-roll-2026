@@ -1,4 +1,5 @@
 mod app;
+mod audio;
 mod languages;
 mod llm;
 mod problem;
@@ -6,6 +7,7 @@ mod syntax;
 
 use anyhow::Result;
 use app::{App, AppState};
+use audio::AudioPlayer;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers, EnableMouseCapture, DisableMouseCapture},
     execute,
@@ -51,6 +53,10 @@ async fn run_app<B: ratatui::backend::Backend>(
     // 60 FPS tick rate
     let tick_rate = Duration::from_millis(16);
     let mut last_tick = std::time::Instant::now();
+    
+    // Audio player for SFX
+    let mut audio_player = AudioPlayer::new();
+    let mut audio_playing = false;
 
     loop {
         // Render
@@ -59,6 +65,26 @@ async fn run_app<B: ratatui::backend::Backend>(
         // Poll for async execution output
         app.poll_execution();
         app.poll_translation();
+        
+        // Handle audio: start.mp3 plays at 0 seconds, end.mp3 when language appears
+        if let Some(ref mut player) = audio_player {
+            // Start audio when transitioning begins (countdown hits 0)
+            let should_start = matches!(app.state, AppState::Transitioning(_));
+            
+            // End audio when the language name appears on screen (Revealing progress > 0.65)
+            let language_revealed = match app.state {
+                AppState::Revealing(progress) => progress > 0.65,
+                _ => false,
+            };
+            
+            if should_start && !audio_playing {
+                player.play_start_sfx();
+                audio_playing = true;
+            } else if language_revealed && audio_playing {
+                player.play_end_sfx();
+                audio_playing = false;
+            }
+        }
 
         // Calculate timeout for next tick
         let timeout = tick_rate
