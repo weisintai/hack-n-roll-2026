@@ -198,15 +198,15 @@ impl App {
                 }
             }
             AppState::Countdown(count) => {
-                if let Some(start) = self.countdown_start {
-                    let elapsed = start.elapsed().as_secs_f32();
-                    let new_count = (5.0 - elapsed.floor()).max(0.0) as u8;
-                    
-                    if new_count == 0 || elapsed >= 5.0 {
-                        self.start_transition();
-                    } else if new_count != count {
-                        self.state = AppState::Countdown(new_count);
-                    }
+                // Use the actual remaining time to stay in sync with the footer timer
+                let elapsed = self.last_randomize.elapsed();
+                let remaining = self.randomize_interval.saturating_sub(elapsed);
+                let new_count = remaining.as_secs() as u8;
+                
+                if new_count == 0 || remaining.is_zero() {
+                    self.start_transition();
+                } else if new_count != count {
+                    self.state = AppState::Countdown(new_count);
                 }
             }
             AppState::Transitioning(_progress) => {
@@ -1298,7 +1298,7 @@ impl App {
         // First render the normal coding view so user can see their code
         self.render_coding(frame);
         
-        // Then overlay the countdown popup
+        // Then overlay the big countdown
         let color = match count {
             5 => Color::Green,
             4 => Color::Yellow,
@@ -1308,32 +1308,86 @@ impl App {
             _ => Color::White,
         };
 
-        let countdown_text = vec![
-            Line::from(""),
+        // Big ASCII art numbers
+        let big_number = match count {
+            5 => vec![
+                " ███████ ",
+                " ██      ",
+                " ███████ ",
+                "      ██ ",
+                " ███████ ",
+            ],
+            4 => vec![
+                " ██   ██ ",
+                " ██   ██ ",
+                " ███████ ",
+                "      ██ ",
+                "      ██ ",
+            ],
+            3 => vec![
+                " ███████ ",
+                "      ██ ",
+                " ███████ ",
+                "      ██ ",
+                " ███████ ",
+            ],
+            2 => vec![
+                " ███████ ",
+                "      ██ ",
+                " ███████ ",
+                " ██      ",
+                " ███████ ",
+            ],
+            1 => vec![
+                "    ██   ",
+                "   ███   ",
+                "    ██   ",
+                "    ██   ",
+                "   ████  ",
+            ],
+            _ => vec![
+                " ███████ ",
+                " ██   ██ ",
+                " ██   ██ ",
+                " ██   ██ ",
+                " ███████ ",
+            ],
+        };
+
+        let mut countdown_text = vec![
             Line::from(Span::styled(
-                "⚠️  LANGUAGE CHANGE!  ⚠️",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                format!("    {}    ", count),
-                Style::default().fg(color).add_modifier(Modifier::BOLD)
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                "(Keep typing!)",
-                Style::default().fg(Color::DarkGray)
+                "⚠️  LANGUAGE CHANGE INCOMING  ⚠️",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD | Modifier::SLOW_BLINK)
             )),
             Line::from(""),
         ];
         
-        let popup_area = centered_rect(25, 25, size);
+        // Add the big number
+        for line in big_number {
+            countdown_text.push(Line::from(Span::styled(
+                line,
+                Style::default().fg(color).add_modifier(Modifier::BOLD)
+            )));
+        }
+        
+        countdown_text.push(Line::from(""));
+        countdown_text.push(Line::from(Span::styled(
+            "Keep typing! Your code will be translated.",
+            Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC)
+        )));
+        
+        let popup_area = centered_rect(50, 28, size);
+        
+        // Glass UI effect: dark semi-transparent background
+        let glass_bg = Color::Rgb(20, 20, 30); // Dark blue-ish tint
+        
         let popup = Paragraph::new(countdown_text)
             .alignment(Alignment::Center)
             .block(Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(color))
-                .style(Style::default().bg(Color::Black)));
+                .border_type(ratatui::widgets::BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Rgb(100, 100, 120)))
+                .style(Style::default().bg(glass_bg)));
         
         frame.render_widget(popup, popup_area);
     }
