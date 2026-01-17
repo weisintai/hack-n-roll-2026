@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hack-n-Roll 2026 Project
 
-## Getting Started
+## 🎮 Code Arcade - Terminal Language Roulette
 
-First, run the development server:
+A retro arcade-style terminal UI coding challenge game built with Rust and Ratatui!
+
+### Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Run the TUI game
+cargo run --release
+
+# Or use the convenience script
+./start.sh
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### What is This?
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+An interactive terminal application where you solve coding challenges while racing against a 45-second timer that randomly switches your code between programming languages (Python, JavaScript, TypeScript, Rust, Go, Java)!
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Key Features:**
+- 🎯 Split-panel interface (problem description + code editor)
+- ⏱️ 45-second language randomization timer
+- 🎨 Retro arcade aesthetic with animations
+- ⌨️ Full text editor with syntax highlighting
+- ✅ Submit with Cmd+S for instant test results
+- 🌐 6 programming languages supported
 
-## Learn More
+### Documentation
 
-To learn more about Next.js, take a look at the following resources:
+- **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - Complete technical overview
+- **[CODE_ARCADE_README.md](CODE_ARCADE_README.md)** - Detailed user guide
+- **[UI_GUIDE.md](UI_GUIDE.md)** - Visual UI reference and design
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+├── src/
+│   ├── main.rs          # Entry point & terminal setup
+│   ├── app.rs           # App state & UI rendering
+│   ├── languages.rs     # Language conversion logic
+│   └── problem.rs       # Problems & test runner
+├── Cargo.toml           # Rust dependencies
+├── start.sh             # Quick start script
+└── README.md            # This file
+```
 
-## Deploy on Vercel
+### Tech Stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Ratatui** - Terminal UI framework
+- **Crossterm** - Terminal manipulation
+- **Rust** - Systems programming language
+- **Tokio** - Async runtime (for future API calls)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Next.js App (Original)
+
+This workspace also contains a Next.js project in the `app/` directory. To run it:
+
+```bash
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser.
+
+---
+
+**Built for Hack-n-Roll 2026** 🚀
+
