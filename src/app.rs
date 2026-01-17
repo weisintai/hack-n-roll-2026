@@ -1964,29 +1964,49 @@ impl App {
                 message.push(Line::from(""));
                 // Show loading animation if translation isn't ready yet
                 if !self.translation_ready() {
-                    // Animated loading dots
-                    let dots = match self.glitch_frame % 4 {
-                        0 => "   ",
-                        1 => ".  ",
-                        2 => ".. ",
-                        _ => "...",
+                    // Spinner animation
+                    let spinner = match self.glitch_frame % 8 {
+                        0 => "⠋",
+                        1 => "⠙",
+                        2 => "⠹",
+                        3 => "⠸",
+                        4 => "⠼",
+                        5 => "⠴",
+                        6 => "⠦",
+                        _ => "⠧",
                     };
+
+                    // Animated progress bar (bounces back and forth)
+                    let bar_width = 20;
+                    let pos = (self.glitch_frame % 16) as usize;
+                    let bounce_pos = if pos < 8 { pos } else { 16 - pos };
+                    let bar: String = (0..bar_width).map(|i| {
+                        let dist = (i as i32 - (bounce_pos as i32 * 2 + 2)).abs();
+                        if dist == 0 { '█' }
+                        else if dist == 1 { '▓' }
+                        else if dist == 2 { '▒' }
+                        else if dist == 3 { '░' }
+                        else { '·' }
+                    }).collect();
+
                     message.push(Line::from(Span::styled(
-                        format!("[ TRANSLATING CODE{} ]", dots),
+                        format!("{} TRANSLATING CODE {}", spinner, spinner),
                         Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
                     )));
+                    message.push(Line::from(""));
                     message.push(Line::from(Span::styled(
-                        "╔═══════════════════════════════╗",
-                        Style::default().fg(Color::Yellow)
+                        format!("┌{}┐", "─".repeat(bar_width + 2)),
+                        Style::default().fg(Color::Magenta)
                     )));
                     message.push(Line::from(Span::styled(
-                        "║  ▓▓▓▒▒▒░░░ PROCESSING ░░░▒▒▒▓▓▓  ║",
-                        Style::default().fg(Color::Yellow)
+                        format!("│ {} │", bar),
+                        Style::default().fg(Color::Magenta)
                     )));
                     message.push(Line::from(Span::styled(
-                        "╚═══════════════════════════════╝",
-                        Style::default().fg(Color::Yellow)
+                        format!("└{}┘", "─".repeat(bar_width + 2)),
+                        Style::default().fg(Color::Magenta)
                     )));
+                    message.push(Line::from(""));
                 } else {
                     message.push(Line::from(Span::styled(
                         "GET READY TO LEARN A NEW LANGUAGE, BUDDY!",
