@@ -340,9 +340,7 @@ struct PistonResponse {
 struct PistonRunResult {
     stdout: String,
     stderr: String,
-    output: String,
     code: Option<i32>,
-    signal: Option<String>,
 }
 
 /// Async test runner using Piston API
@@ -403,13 +401,13 @@ pub async fn run_tests_on_piston(
         Language::Python => generate_python_harness(&code, &test_cases_json),
         Language::JavaScript => generate_javascript_harness(&code, &test_cases_json),
         Language::TypeScript => generate_typescript_harness(&code, &test_cases_json),
-        Language::Go => generate_go_harness(&code, &test_cases_json),
-        Language::Java => generate_java_harness(&code, &test_cases_json),
+        Language::Go => generate_go_harness(&code, &test_cases_json, problem.id),
+        Language::Java => generate_java_harness(&code, &test_cases_json, problem.id),
         Language::Rust => {
             // Rust on Piston is limited (no full Cargo support)
             // We'll provide a basic wrapper but note limitations
             send_log("Note: Rust on Piston has limited support (no Cargo dependencies)".to_string(), false);
-            generate_rust_harness(&code, &test_cases_json)
+            generate_rust_harness(&code, &test_cases_json, problem.id)
         }
     };
 
@@ -522,19 +520,65 @@ const results = [];
 for (let i = 0; i < testCases.length; i++) {{
     try {{
         const tc = testCases[i];
-        const nums = JSON.parse(tc.nums);
-        const target = parseInt(tc.target);
-        const expected = JSON.parse(tc.expected);
-        
         let actual = null;
-        // Try to find the solution function dynamically
-        if (typeof twoSum !== 'undefined') {{
-            actual = twoSum(nums, target);
-        }} else {{
-            // Try to find any function that looks like it could be the solution
-            const globalFuncs = Object.keys(this || {{}}).filter(k => typeof (this || {{}})[k] === 'function');
-            if (globalFuncs.length > 0) {{
-                actual = (this || {{}})[globalFuncs[0]](nums, target);
+        let expected = null;
+        
+        // Dynamically handle different problem types
+        if (tc.nums !== undefined && tc.target !== undefined) {{
+            // Two Sum (problem 1)
+            const nums = JSON.parse(tc.nums);
+            const target = parseInt(tc.target);
+            expected = JSON.parse(tc.expected);
+            
+            // Try to find the function
+            if (typeof twoSum !== 'undefined') {{
+                actual = twoSum(nums, target);
+            }} else if (typeof two_sum !== 'undefined') {{
+                actual = two_sum(nums, target);
+            }}
+        }} else if (tc.s !== undefined && tc.expected !== undefined) {{
+            // String problems (problem 2 or 4)
+            const s_input = JSON.parse(tc.s);
+            expected = JSON.parse(tc.expected);
+            
+            if (Array.isArray(s_input)) {{
+                // Reverse String (problem 2) - modifies in place OR returns result
+                const sCopy = [...s_input];
+                let result;
+                if (typeof reverseString !== 'undefined') {{
+                    result = reverseString(sCopy);
+                    actual = result !== undefined ? result : sCopy;
+                }} else if (typeof reverse_string !== 'undefined') {{
+                    result = reverse_string(sCopy);
+                    actual = result !== undefined ? result : sCopy;
+                }}
+            }} else {{
+                // Palindrome check (problem 4)
+                if (typeof isPalindrome !== 'undefined') {{
+                    actual = isPalindrome(s_input);
+                }} else if (typeof is_palindrome !== 'undefined') {{
+                    actual = is_palindrome(s_input);
+                }}
+            }}
+        }} else if (tc.n !== undefined) {{
+            // Number problems (problem 3 or 5)
+            const n = parseInt(tc.n);
+            expected = JSON.parse(tc.expected);
+            
+            if (Array.isArray(expected)) {{
+                // Fizz Buzz (problem 3)
+                if (typeof fizzBuzz !== 'undefined') {{
+                    actual = fizzBuzz(n);
+                }} else if (typeof fizz_buzz !== 'undefined') {{
+                    actual = fizz_buzz(n);
+                }}
+            }} else {{
+                // Fibonacci (problem 5)
+                if (typeof fibonacci !== 'undefined') {{
+                    actual = fibonacci(n);
+                }} else if (typeof fib !== 'undefined') {{
+                    actual = fib(n);
+                }}
             }}
         }}
         
@@ -542,8 +586,20 @@ for (let i = 0; i < testCases.length; i++) {{
             results.push({{ passed: false, actual: "Error: No function found" }});
             continue;
         }}
-            
-        const passed = JSON.stringify(actual.sort()) === JSON.stringify(expected.sort());
+        
+        // Compare results
+        let passed = false;
+        if (Array.isArray(actual) && Array.isArray(expected)) {{
+            // For array results, sort before comparison if they're numeric arrays
+            if (actual.length > 0 && typeof actual[0] === 'number') {{
+                passed = JSON.stringify(actual.sort((a,b)=>a-b)) === JSON.stringify(expected.sort((a,b)=>a-b));
+            }} else {{
+                passed = JSON.stringify(actual) === JSON.stringify(expected);
+            }}
+        }} else {{
+            passed = JSON.stringify(actual) === JSON.stringify(expected);
+        }}
+        
         results.push({{ passed, actual: JSON.stringify(actual) }});
     }} catch (e) {{
         results.push({{ passed: false, actual: `Error: ${{e.message}}` }});
@@ -570,22 +626,86 @@ const results: any[] = [];
 for (let i = 0; i < testCases.length; i++) {{
     try {{
         const tc = testCases[i];
-        const nums: number[] = JSON.parse(tc.nums);
-        const target: number = parseInt(tc.target);
-        const expected: number[] = JSON.parse(tc.expected);
+        let actual: any = null;
+        let expected: any = null;
         
-        let actual: number[] | null = null;
-        // Try to find the solution function (TypeScript uses camelCase conventionally)
-        if (typeof twoSum !== 'undefined') {{
-            actual = twoSum(nums, target);
+        // Dynamically handle different problem types
+        if (tc.nums !== undefined && tc.target !== undefined) {{
+            // Two Sum (problem 1)
+            const nums: number[] = JSON.parse(tc.nums);
+            const target: number = parseInt(tc.target);
+            expected = JSON.parse(tc.expected);
+            
+            // Try to find the function
+            if (typeof twoSum !== 'undefined') {{
+                actual = twoSum(nums, target);
+            }} else if (typeof two_sum !== 'undefined') {{
+                actual = two_sum(nums, target);
+            }}
+        }} else if (tc.s !== undefined && tc.expected !== undefined) {{
+            // String problems (problem 2 or 4)
+            const s_input: any = JSON.parse(tc.s);
+            expected = JSON.parse(tc.expected);
+            
+            if (Array.isArray(s_input)) {{
+                // Reverse String (problem 2) - modifies in place OR returns result
+                const sCopy = [...s_input];
+                let result: any;
+                if (typeof reverseString !== 'undefined') {{
+                    result = reverseString(sCopy);
+                    actual = result !== undefined ? result : sCopy;
+                }} else if (typeof reverse_string !== 'undefined') {{
+                    result = reverse_string(sCopy);
+                    actual = result !== undefined ? result : sCopy;
+                }}
+            }} else {{
+                // Palindrome check (problem 4)
+                if (typeof isPalindrome !== 'undefined') {{
+                    actual = isPalindrome(s_input);
+                }} else if (typeof is_palindrome !== 'undefined') {{
+                    actual = is_palindrome(s_input);
+                }}
+            }}
+        }} else if (tc.n !== undefined) {{
+            // Number problems (problem 3 or 5)
+            const n: number = parseInt(tc.n);
+            expected = JSON.parse(tc.expected);
+            
+            if (Array.isArray(expected)) {{
+                // Fizz Buzz (problem 3)
+                if (typeof fizzBuzz !== 'undefined') {{
+                    actual = fizzBuzz(n);
+                }} else if (typeof fizz_buzz !== 'undefined') {{
+                    actual = fizz_buzz(n);
+                }}
+            }} else {{
+                // Fibonacci (problem 5)
+                if (typeof fibonacci !== 'undefined') {{
+                    actual = fibonacci(n);
+                }} else if (typeof fib !== 'undefined') {{
+                    actual = fib(n);
+                }}
+            }}
         }}
         
         if (actual === null) {{
-            results.push({{ passed: false, actual: "Error: No twoSum function found" }});
+            results.push({{ passed: false, actual: "Error: No function found" }});
             continue;
         }}
-            
-        const passed = JSON.stringify(actual.sort()) === JSON.stringify(expected.sort());
+        
+        // Compare results
+        let passed = false;
+        if (Array.isArray(actual) && Array.isArray(expected)) {{
+            // For array results, sort before comparison if they're numeric arrays
+            if (actual.length > 0 && typeof actual[0] === 'number') {{
+                passed = JSON.stringify(actual.sort((a:any,b:any)=>a-b)) === JSON.stringify(expected.sort((a:any,b:any)=>a-b));
+            }} else {{
+                passed = JSON.stringify(actual) === JSON.stringify(expected);
+            }}
+        }} else {{
+            passed = JSON.stringify(actual) === JSON.stringify(expected);
+        }}
+        
         results.push({{ passed, actual: JSON.stringify(actual) }});
     }} catch (e: any) {{
         results.push({{ passed: false, actual: `Error: ${{e.message}}` }});
@@ -599,22 +719,9 @@ console.log(JSON.stringify(results));
     )
 }
 
-fn generate_go_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
-    // Extract test case data
-    let test_data: Vec<(String, String, String)> = test_cases.iter().map(|tc| {
-        let nums = tc["nums"].as_str().unwrap_or("[]");
-        let target = tc["target"].as_str().unwrap_or("0");
-        let expected = tc["expected"].as_str().unwrap_or("[]");
-        (nums.to_string(), target.to_string(), expected.to_string())
-    }).collect();
-    
-    let mut test_cases_code = String::new();
-    for (i, (nums, target, expected)) in test_data.iter().enumerate() {
-        test_cases_code.push_str(&format!(
-            "\tTestCase{{Nums: \"{}\", Target: \"{}\", Expected: \"{}\"}},\n",
-            nums.replace('"', "\\\""), target.replace('"', "\\\""), expected.replace('"', "\\\"")
-        ));
-    }
+fn generate_go_harness(user_code: &str, test_cases: &[serde_json::Value], _problem_id: usize) -> String {
+    // Serialize test cases
+    let test_cases_str = serde_json::to_string(test_cases).unwrap_or_default();
     
     format!(
         r#"
@@ -629,12 +736,6 @@ import (
 )
 
 {}
-
-type TestCase struct {{
-	Nums     string
-	Target   string
-	Expected string
-}}
 
 type TestResult struct {{
 	Passed bool   `json:"passed"`
@@ -656,40 +757,121 @@ func parseIntArray(s string) []int {{
 	return result
 }}
 
+func parseStringArray(s string) []string {{
+	var result []string
+	json.Unmarshal([]byte(s), &result)
+	return result
+}}
+
 func main() {{
-	testCases := []TestCase{{
-{}	}}
+	testCasesJSON := `{}`
+	var testCases []map[string]interface{{}}
+	json.Unmarshal([]byte(testCasesJSON), &testCases)
 	
 	results := []TestResult{{}}
 	
 	for _, tc := range testCases {{
-		nums := parseIntArray(tc.Nums)
-		expected := parseIntArray(tc.Expected)
-		target, _ := strconv.Atoi(tc.Target)
+		var passed bool
+		var actualStr string
 		
-		actual := twoSum(nums, target)
-		
-		// Sort for comparison
-		sortedActual := make([]int, len(actual))
-		copy(sortedActual, actual)
-		sort.Ints(sortedActual)
-		
-		sortedExpected := make([]int, len(expected))
-		copy(sortedExpected, expected)
-		sort.Ints(sortedExpected)
-		
-		passed := len(sortedActual) == len(sortedExpected)
-		if passed {{
-			for i := range sortedActual {{
-				if sortedActual[i] != sortedExpected[i] {{
-					passed = false
-					break
+		// Handle different problem types based on fields in test case
+		if nums, hasNums := tc["nums"]; hasNums {{
+			// Problem 1: Two Sum
+			numsArr := parseIntArray(nums.(string))
+			target, _ := strconv.Atoi(tc["target"].(string))
+			expected := parseIntArray(tc["expected"].(string))
+			
+			actual := twoSum(numsArr, target)
+			
+			sortedActual := make([]int, len(actual))
+			copy(sortedActual, actual)
+			sort.Ints(sortedActual)
+			
+			sortedExpected := make([]int, len(expected))
+			copy(sortedExpected, expected)
+			sort.Ints(sortedExpected)
+			
+			passed = len(sortedActual) == len(sortedExpected)
+			if passed {{
+				for i := range sortedActual {{
+					if sortedActual[i] != sortedExpected[i] {{
+						passed = false
+						break
+					}}
 				}}
+			}}
+			
+			actualJSON, _ := json.Marshal(actual)
+			actualStr = string(actualJSON)
+			
+		}} else if s, hasS := tc["s"]; hasS {{
+			sStr := s.(string)
+			expected := tc["expected"].(string)
+			
+			// Check if it's an array or string
+			if strings.HasPrefix(sStr, "[") {{
+				// Problem 2: Reverse String
+				var sArr []string
+				json.Unmarshal([]byte(sStr), &sArr)
+				
+				reverseString(&sArr)
+				
+				var expectedArr []string
+				json.Unmarshal([]byte(expected), &expectedArr)
+				
+				passed = len(sArr) == len(expectedArr)
+				if passed {{
+					for i := range sArr {{
+						if sArr[i] != expectedArr[i] {{
+							passed = false
+							break
+						}}
+					}}
+				}}
+				
+				actualJSON, _ := json.Marshal(sArr)
+				actualStr = string(actualJSON)
+			}} else {{
+				// Problem 4: Palindrome
+				sStrUnquoted := strings.Trim(sStr, "\"")
+				actual := isPalindrome(sStrUnquoted)
+				expectedBool := expected == "true"
+				passed = actual == expectedBool
+				actualStr = fmt.Sprintf("%v", actual)
+			}}
+			
+		}} else if n, hasN := tc["n"]; hasN {{
+			nInt, _ := strconv.Atoi(n.(string))
+			expected := tc["expected"].(string)
+			
+			if strings.HasPrefix(expected, "[") {{
+				// Problem 3: Fizz Buzz
+				actual := fizzBuzz(nInt)
+				var expectedArr []string
+				json.Unmarshal([]byte(expected), &expectedArr)
+				
+				passed = len(actual) == len(expectedArr)
+				if passed {{
+					for i := range actual {{
+						if actual[i] != expectedArr[i] {{
+							passed = false
+							break
+						}}
+					}}
+				}}
+				
+				actualJSON, _ := json.Marshal(actual)
+				actualStr = string(actualJSON)
+			}} else {{
+				// Problem 5: Fibonacci
+				actual := fib(nInt)
+				expectedInt, _ := strconv.Atoi(expected)
+				passed = actual == expectedInt
+				actualStr = strconv.Itoa(actual)
 			}}
 		}}
 		
-		actualJSON, _ := json.Marshal(actual)
-		results = append(results, TestResult{{Passed: passed, Actual: string(actualJSON)}})
+		results = append(results, TestResult{{Passed: passed, Actual: actualStr}})
 	}}
 	
 	output, _ := json.Marshal(results)
@@ -697,43 +879,58 @@ func main() {{
 }}
 "#,
         user_code,
-        test_cases_code
+        test_cases_str
     )
 }
 
-fn generate_java_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
-    // Extract test case data
-    let test_data: Vec<(String, String, String)> = test_cases.iter().map(|tc| {
-        let nums = tc["nums"].as_str().unwrap_or("[]");
-        let target = tc["target"].as_str().unwrap_or("0");
-        let expected = tc["expected"].as_str().unwrap_or("[]");
-        (nums.to_string(), target.to_string(), expected.to_string())
-    }).collect();
-    
-    let mut test_cases_code = String::new();
-    for (i, (nums, target, expected)) in test_data.iter().enumerate() {
-        test_cases_code.push_str(&format!(
-            "        testCases[{}] = new TestCase(\"{}\", \"{}\", \"{}\");\n",
-            i, nums.replace('"', "\\\""), target.replace('"', "\\\""), expected.replace('"', "\\\"")
-        ));
-    }
-    
+fn generate_java_harness(user_code: &str, test_cases: &[serde_json::Value], _problem_id: usize) -> String {
     // Process user code: strip imports and ensure proper structure
     let user_code_clean = user_code.lines()
         .filter(|line| !line.trim().starts_with("import ") && !line.trim().starts_with("package "))
         .collect::<Vec<_>>()
         .join("\n");
     
-    // Ensure user code has proper structure or provide placeholder, and indent for class nesting
+    // Indent each line for proper class nesting
     let user_code_safe = if user_code_clean.trim().is_empty() {
-        "        public int[] twoSum(int[] nums, int target) {\n            return new int[0];\n        }".to_string()
+        "        // No user code provided\n".to_string()
     } else {
-        // Indent each line for proper class nesting (8 spaces as it's inside static class Solution which is inside Main)
         user_code_clean.lines()
             .map(|line| if line.trim().is_empty() { String::new() } else { format!("        {}", line) })
             .collect::<Vec<_>>()
             .join("\n")
     };
+    
+    // Generate test case initialization code based on problem structure
+    let mut test_init = String::new();
+    for (_idx, tc) in test_cases.iter().enumerate() {
+        if tc.get("nums").is_some() {
+            let nums = tc["nums"].as_str().unwrap_or("[]");
+            let target = tc["target"].as_str().unwrap_or("0");
+            let expected = tc["expected"].as_str().unwrap_or("[]");
+            test_init.push_str(&format!(
+                "        tests.add(new Object[]{{1, \"{}\", \"{}\", \"{}\"}});\n",
+                nums.replace('"', "\\\""), target.replace('"', "\\\""), expected.replace('"', "\\\"")
+            ));
+        } else if tc.get("s").is_some() {
+            let s = tc["s"].as_str().unwrap_or("\"\"");
+            let expected = tc["expected"].as_str().unwrap_or("\"\"");
+            // Determine if it's problem 2 or 4
+            let prob_type = if s.starts_with('[') { 2 } else { 4 };
+            test_init.push_str(&format!(
+                "        tests.add(new Object[]{{{}, \"{}\", \"{}\"}});\n",
+                prob_type, s.replace('"', "\\\""), expected.replace('"', "\\\"")
+            ));
+        } else if tc.get("n").is_some() {
+            let n = tc["n"].as_str().unwrap_or("0");
+            let expected = tc["expected"].as_str().unwrap_or("0");
+            // Determine if it's problem 3 or 5
+            let prob_type = if expected.starts_with('[') { 3 } else { 5 };
+            test_init.push_str(&format!(
+                "        tests.add(new Object[]{{{}, \"{}\", \"{}\"}});\n",
+                prob_type, n, expected.replace('"', "\\\"")
+            ));
+        }
+    }
     
     format!(
         r#"
@@ -744,51 +941,76 @@ public class Main {{
 {}
     }}
 
-    static class TestCase {{
-        String nums;
-        String target;
-        String expected;
-        
-        TestCase(String n, String t, String e) {{
-            this.nums = n;
-            this.target = t;
-            this.expected = e;
-        }}
-    }}
-
     public static void main(String[] args) {{
-        TestCase[] testCases = new TestCase[{}];
+        List<Object[]> tests = new ArrayList<>();
 {}
         
         StringBuilder results = new StringBuilder("[");
         Solution solution = new Solution();
         
-        for (int idx = 0; idx < testCases.length; idx++) {{
+        for (int idx = 0; idx < tests.size(); idx++) {{
             try {{
-                TestCase tc = testCases[idx];
+                Object[] test = tests.get(idx);
+                int problemType = (Integer) test[0];
+                boolean passed = false;
+                String actualStr = "";
                 
-                // Parse arrays manually
-                int[] nums = parseIntArray(tc.nums);
-                int target = Integer.parseInt(tc.target);
-                int[] expected = parseIntArray(tc.expected);
-                
-                int[] actual = solution.twoSum(nums, target);
-                
-                Arrays.sort(actual);
-                Arrays.sort(expected);
-                boolean passed = Arrays.equals(actual, expected);
+                if (problemType == 1) {{
+                    // Two Sum
+                    int[] nums = parseIntArray((String) test[1]);
+                    int target = Integer.parseInt((String) test[2]);
+                    int[] expected = parseIntArray((String) test[3]);
+                    
+                    int[] actual = solution.twoSum(nums, target);
+                    Arrays.sort(actual);
+                    Arrays.sort(expected);
+                    passed = Arrays.equals(actual, expected);
+                    actualStr = Arrays.toString(actual);
+                    
+                }} else if (problemType == 2) {{
+                    // Reverse String
+                    String[] sArr = parseStringArray((String) test[1]);
+                    solution.reverseString(sArr);
+                    String[] expectedArr = parseStringArray((String) test[2]);
+                    passed = Arrays.equals(sArr, expectedArr);
+                    actualStr = Arrays.toString(sArr);
+                    
+                }} else if (problemType == 3) {{
+                    // Fizz Buzz
+                    int n = Integer.parseInt((String) test[1]);
+                    String[] actual = solution.fizzBuzz(n);
+                    String[] expectedArr = parseStringArray((String) test[2]);
+                    passed = Arrays.equals(actual, expectedArr);
+                    actualStr = Arrays.toString(actual);
+                    
+                }} else if (problemType == 4) {{
+                    // Palindrome
+                    String s = ((String) test[1]).replaceAll("^\\\"|\\\"$", "");
+                    boolean actual = solution.isPalindrome(s);
+                    boolean expectedBool = Boolean.parseBoolean((String) test[2]);
+                    passed = actual == expectedBool;
+                    actualStr = String.valueOf(actual);
+                    
+                }} else if (problemType == 5) {{
+                    // Fibonacci
+                    int n = Integer.parseInt((String) test[1]);
+                    int actual = solution.fib(n);
+                    int expectedInt = Integer.parseInt((String) test[2]);
+                    passed = actual == expectedInt;
+                    actualStr = String.valueOf(actual);
+                }}
                 
                 if (idx > 0) results.append(",");
-                results.append("{{\"passed\":");
+                results.append("{{\\\"passed\\\":");
                 results.append(passed);
-                results.append(",\"actual\":\"");
-                results.append(Arrays.toString(actual));
-                results.append("\"}}");
+                results.append(",\\\"actual\\\":\\\"");
+                results.append(actualStr.replace("\\\"", "\\\\\\\\\\\""));
+                results.append("\\\"}}");
             }} catch (Exception e) {{
                 if (idx > 0) results.append(",");
-                results.append("{{\"passed\":false,\"actual\":\"Error: ");
+                results.append("{{\\\"passed\\\":false,\\\"actual\\\":\\\"Error: ");
                 results.append(e.getMessage());
-                results.append("\"}}");
+                results.append("\\\"}}");
             }}
         }}
         results.append("]");
@@ -806,28 +1028,39 @@ public class Main {{
         }}
         return result;
     }}
+    
+    static String[] parseStringArray(String s) {{
+        s = s.trim();
+        if (s.startsWith("[")) {{
+            s = s.substring(1, s.length() - 1);
+        }}
+        if (s.isEmpty()) return new String[0];
+        String[] parts = s.split(",");
+        List<String> result = new ArrayList<>();
+        for (String part : parts) {{
+            result.add(part.trim().replaceAll("^\\\"|\\\"$", ""));
+        }}
+        return result.toArray(new String[0]);
+    }}
 }}
 "#,
         user_code_safe,
-        test_data.len(),
-        test_cases_code
+        test_init
     )
 }
 
-fn generate_rust_harness(user_code: &str, test_cases: &[serde_json::Value]) -> String {
-    // Piston's Rust doesn't support Cargo dependencies, so manually build test cases
-    let test_data: Vec<(String, String, String)> = test_cases.iter().map(|tc| {
-        let nums = tc["nums"].as_str().unwrap_or("[]");
-        let target = tc["target"].as_str().unwrap_or("0");
-        let expected = tc["expected"].as_str().unwrap_or("[]");
-        (nums.to_string(), target.to_string(), expected.to_string())
-    }).collect();
-    
-    // Generate test case execution code
+fn generate_rust_harness(user_code: &str, test_cases: &[serde_json::Value], _problem_id: usize) -> String {
+    // Generate test case execution code based on problem structure
     let mut test_execution = String::new();
-    for (i, (nums, target, expected)) in test_data.iter().enumerate() {
-        test_execution.push_str(&format!(
-            r#"
+    
+    for (i, tc) in test_cases.iter().enumerate() {
+        if tc.get("nums").is_some() {
+            // Problem 1: Two Sum
+            let nums = tc["nums"].as_str().unwrap_or("[]");
+            let target = tc["target"].as_str().unwrap_or("0");
+            let expected = tc["expected"].as_str().unwrap_or("[]");
+            test_execution.push_str(&format!(
+                r#"
     // Test case {}
     {{
         let nums = vec!{};
@@ -847,8 +1080,97 @@ fn generate_rust_harness(user_code: &str, test_cases: &[serde_json::Value]) -> S
         idx += 1;
     }}
 "#,
-            i + 1, nums, target, expected
-        ));
+                i + 1, nums, target, expected
+            ));
+        } else if tc.get("s").is_some() {
+            let s = tc["s"].as_str().unwrap_or("\"\"");
+            let expected = tc["expected"].as_str().unwrap_or("\"\"");
+            
+            if s.starts_with('[') {
+                // Problem 2: Reverse String
+                test_execution.push_str(&format!(
+                    r#"
+    // Test case {}
+    {{
+        let mut s: Vec<char> = {};
+        let expected: Vec<char> = {};
+        reverse_string(&mut s);
+        
+        let passed = s == expected;
+        if idx > 0 {{ print!(","); }}
+        print!("{{{{\"passed\":{{}},", passed);
+        print!("\"actual\":\"{{:?}}\"}}}}", s);
+        idx += 1;
+    }}
+"#,
+                    i + 1, s, expected
+                ));
+            } else {
+                // Problem 4: Palindrome
+                let s_unquoted = s.trim_matches('"');
+                let expected_bool = expected == "true";
+                test_execution.push_str(&format!(
+                    r#"
+    // Test case {}
+    {{
+        let s = "{}".to_string();
+        let expected = {};
+        let actual = is_palindrome(s);
+        
+        let passed = actual == expected;
+        if idx > 0 {{ print!(","); }}
+        print!("{{{{\"passed\":{{}},", passed);
+        print!("\"actual\":\"{{}}\"}}}}", actual);
+        idx += 1;
+    }}
+"#,
+                    i + 1, s_unquoted.replace("\\", "\\\\").replace("\"", "\\\""), expected_bool
+                ));
+            }
+        } else if tc.get("n").is_some() {
+            let n = tc["n"].as_str().unwrap_or("0");
+            let expected = tc["expected"].as_str().unwrap_or("0");
+            
+            if expected.starts_with('[') {
+                // Problem 3: Fizz Buzz
+                test_execution.push_str(&format!(
+                    r#"
+    // Test case {}
+    {{
+        let n = {};
+        let expected: Vec<String> = {};
+        let actual = fizz_buzz(n);
+        
+        let passed = actual == expected;
+        if idx > 0 {{ print!(","); }}
+        print!("{{{{\"passed\":{{}},", passed);
+        print!("\"actual\":\"{{:?}}\"}}}}", actual);
+        idx += 1;
+    }}
+"#,
+                    i + 1, n, expected
+                ));
+            } else {
+                // Problem 5: Fibonacci
+                test_execution.push_str(&format!(
+                    r#"
+    // Test case {}
+    {{
+        let n = {};
+        let expected = {};
+        let actual = fib(n);
+        
+        let passed = actual == expected;
+        if idx > 0 {{ print!(","); }}
+        print!("{{{{\"passed\":{{}},", passed);
+        print!("\"actual\":\"{{}}\"}}}}", actual);
+        idx += 1;
+    }}
+"#,
+                    i + 1, n, expected
+                ));
+            }
+        }
     }
     
     format!(
@@ -883,34 +1205,75 @@ test_cases = {}
 results = []
 for i, tc in enumerate(test_cases):
     try:
-        # Piston might receive string inputs differently, handle eval carefully
-        nums = eval(tc["nums"]) if isinstance(tc["nums"], str) else tc["nums"]
-        target = int(tc["target"])
-        expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
-        
         actual = None
-        # Try finding solution function
-        if 'two_sum' in dir():
-            actual = two_sum(nums, target)
-        elif 'twoSum' in dir():
-             actual = twoSum(nums, target)
-        else:
-            # Fallback search
-             for name in dir():
-                if name.startswith('_'): continue
-                obj = eval(name)
-                if callable(obj):
-                     try:
-                        actual = obj(nums, target)
-                        break
-                     except:
-                        continue
+        expected = None
+        
+        # Dynamically handle different problem types
+        if "nums" in tc and "target" in tc:
+            # Two Sum (problem 1)
+            nums = eval(tc["nums"]) if isinstance(tc["nums"], str) else tc["nums"]
+            target = int(tc["target"])
+            expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
+            
+            # Try finding solution function
+            if 'two_sum' in dir():
+                actual = two_sum(nums, target)
+            elif 'twoSum' in dir():
+                actual = twoSum(nums, target)
+        
+        elif "s" in tc:
+            # String problems (problem 2 or 4)
+            s_input = eval(tc["s"]) if isinstance(tc["s"], str) else tc["s"]
+            expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
+            
+            if isinstance(s_input, list):
+                # Reverse String (problem 2) - modifies in place OR returns result
+                s_copy = s_input.copy()
+                if 'reverse_string' in dir():
+                    result = reverse_string(s_copy)
+                    actual = result if result is not None else s_copy
+                elif 'reverseString' in dir():
+                    result = reverseString(s_copy)
+                    actual = result if result is not None else s_copy
+            else:
+                # Palindrome check (problem 4)
+                if 'is_palindrome' in dir():
+                    actual = is_palindrome(s_input)
+                elif 'isPalindrome' in dir():
+                    actual = isPalindrome(s_input)
+        
+        elif "n" in tc:
+            # Number problems (problem 3 or 5)
+            n = int(tc["n"])
+            expected = eval(tc["expected"]) if isinstance(tc["expected"], str) else tc["expected"]
+            
+            if isinstance(expected, list):
+                # Fizz Buzz (problem 3)
+                if 'fizz_buzz' in dir():
+                    actual = fizz_buzz(n)
+                elif 'fizzBuzz' in dir():
+                    actual = fizzBuzz(n)
+            else:
+                # Fibonacci (problem 5)
+                if 'fibonacci' in dir():
+                    actual = fibonacci(n)
+                elif 'fib' in dir():
+                    actual = fib(n)
         
         if actual is None:
             results.append({{"passed": False, "actual": "Error: No function found"}})
             continue
-            
-        passed = sorted(actual) == sorted(expected)
+        
+        # Compare results
+        if isinstance(actual, list) and isinstance(expected, list):
+            # For array results, sort before comparison if they're numeric
+            if len(actual) > 0 and isinstance(actual[0], (int, float)):
+                passed = sorted(actual) == sorted(expected)
+            else:
+                passed = actual == expected
+        else:
+            passed = actual == expected
+        
         results.append({{"passed": passed, "actual": str(actual)}})
     except Exception as e:
         results.append({{"passed": False, "actual": f"Error: {{e}}"}})

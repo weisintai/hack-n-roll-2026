@@ -39,17 +39,6 @@ impl Language {
         }
     }
 
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Language::JavaScript => "javascript",
-            Language::TypeScript => "typescript",
-            Language::Python => "python",
-            Language::Rust => "rust",
-            Language::Go => "go",
-            Language::Java => "java",
-        }
-    }
-
     pub fn display_name(&self) -> &'static str {
         match self {
             Language::JavaScript => "JavaScript",
