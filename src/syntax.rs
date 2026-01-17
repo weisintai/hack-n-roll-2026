@@ -14,6 +14,12 @@ impl SyntaxHighlighter {
             Language::Rust => Self::highlight_rust(line),
             Language::Go => Self::highlight_go(line),
             Language::Java => Self::highlight_java(line),
+            Language::Haskell => Self::highlight_haskell(line),
+            Language::Lua => Self::highlight_lua(line),
+            Language::OCaml => Self::highlight_ocaml(line),
+            Language::Elixir => Self::highlight_elixir(line),
+            Language::Kotlin => Self::highlight_kotlin(line),
+            Language::Swift => Self::highlight_swift(line),
         }
     }
 
@@ -165,6 +171,173 @@ impl SyntaxHighlighter {
         let types = ["int", "long", "double", "float", "boolean", "char", "byte", "short",
                     "String", "Integer", "Long", "Double", "Float", "Boolean", "Character",
                     "List", "Map", "Set", "ArrayList", "HashMap", "HashSet", "Object"];
+        
+        Self::advanced_tokenize(
+            line,
+            &keywords,
+            &builtins,
+            &types,
+            '/',
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
+        )
+    }
+
+    fn highlight_haskell(line: &str) -> Vec<Span> {
+        let keywords = [
+            "module", "where", "import", "as", "qualified", "hiding",
+            "class", "instance", "data", "type", "newtype", "deriving",
+            "if", "then", "else", "case", "of", "let", "in", "do",
+            "where", "forall", "infixl", "infixr", "infix",
+        ];
+        let builtins = ["True", "False", "Nothing", "Just", "Left", "Right", "pure", "return", "fmap", "bind"];
+        let types = ["Int", "Integer", "Float", "Double", "Bool", "Char", "String",
+                    "Maybe", "Either", "IO", "Monad", "Functor", "Applicative", "List"];
+        
+        Self::advanced_tokenize(
+            line,
+            &keywords,
+            &builtins,
+            &types,
+            '-',  // Haskell uses -- for comments
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
+        )
+    }
+
+    fn highlight_lua(line: &str) -> Vec<Span> {
+        let keywords = [
+            "and", "break", "do", "else", "elseif", "end", "false", "for", "function",
+            "if", "in", "local", "nil", "not", "or", "repeat", "return", "then",
+            "true", "until", "while", "goto",
+        ];
+        let builtins = ["nil", "true", "false", "self", "_G", "_VERSION"];
+        let types = ["print", "type", "tonumber", "tostring", "pairs", "ipairs", "require",
+                    "setmetatable", "getmetatable", "next", "select", "rawget", "rawset"];
+        
+        Self::advanced_tokenize(
+            line,
+            &keywords,
+            &builtins,
+            &types,
+            '-',  // Lua uses -- for comments
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
+        )
+    }
+
+    fn highlight_ocaml(line: &str) -> Vec<Span> {
+        let keywords = [
+            "let", "rec", "in", "fun", "function", "match", "with", "if", "then", "else",
+            "type", "module", "struct", "sig", "open", "include", "val", "mutable",
+            "begin", "end", "for", "while", "do", "done", "to", "downto", "of",
+            "and", "or", "not", "true", "false", "ref", "as", "when", "exception", "raise", "try",
+        ];
+        let builtins = ["true", "false", "None", "Some", "Ok", "Error"];
+        let types = ["int", "float", "bool", "char", "string", "unit", "list", "array",
+                    "option", "result", "ref", "List", "Array", "String"];
+        
+        Self::advanced_tokenize(
+            line,
+            &keywords,
+            &builtins,
+            &types,
+            '#',  // OCaml can use # in some contexts, but (* *) for comments
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
+        )
+    }
+
+    fn highlight_elixir(line: &str) -> Vec<Span> {
+        let keywords = [
+            "def", "defp", "defmodule", "defmacro", "defstruct", "defprotocol", "defimpl",
+            "do", "end", "if", "unless", "cond", "case", "when", "receive", "after",
+            "fn", "for", "try", "catch", "rescue", "raise", "throw", "with",
+            "import", "alias", "require", "use", "quote", "unquote",
+        ];
+        let builtins = ["true", "false", "nil", "self", "__MODULE__", "__ENV__"];
+        let types = ["String", "Integer", "Float", "List", "Map", "Tuple", "Atom", "GenServer",
+                    "Enum", "Stream", "Process", "Agent", "Task"];
+        
+        Self::advanced_tokenize(
+            line,
+            &keywords,
+            &builtins,
+            &types,
+            '#',
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
+        )
+    }
+
+    fn highlight_kotlin(line: &str) -> Vec<Span> {
+        let keywords = [
+            "fun", "val", "var", "class", "object", "interface", "data", "sealed",
+            "if", "else", "when", "for", "while", "do", "return", "break", "continue",
+            "try", "catch", "finally", "throw", "import", "package", "as", "in", "is",
+            "public", "private", "protected", "internal", "open", "abstract", "final",
+            "override", "lateinit", "by", "companion", "inline", "suspend", "const",
+        ];
+        let builtins = ["true", "false", "null", "this", "super", "it"];
+        let types = ["Int", "Long", "Double", "Float", "Boolean", "Char", "String", "Byte", "Short",
+                    "List", "Map", "Set", "MutableList", "MutableMap", "MutableSet", "Array",
+                    "Unit", "Any", "Nothing"];
+        
+        Self::advanced_tokenize(
+            line,
+            &keywords,
+            &builtins,
+            &types,
+            '/',
+            Color::Rgb(197, 134, 192),  // Purple keywords
+            Color::Rgb(86, 156, 214),   // Blue for builtins
+            Color::Rgb(78, 201, 176),   // Teal for types
+            Color::Gray,
+            Color::Rgb(206, 145, 120),  // Orange strings
+            Color::Rgb(181, 206, 168),  // Light green numbers
+            Color::Rgb(220, 220, 170),  // Light yellow functions
+        )
+    }
+
+    fn highlight_swift(line: &str) -> Vec<Span> {
+        let keywords = [
+            "func", "let", "var", "class", "struct", "enum", "protocol", "extension",
+            "if", "else", "guard", "switch", "case", "default", "for", "while", "repeat",
+            "return", "break", "continue", "fallthrough", "import", "in", "is", "as",
+            "try", "catch", "throw", "throws", "defer", "do", "where", "typealias",
+            "public", "private", "fileprivate", "internal", "open", "static", "final",
+            "lazy", "mutating", "nonmutating", "override", "required", "convenience",
+            "dynamic", "inout", "weak", "unowned", "indirect",
+        ];
+        let builtins = ["true", "false", "nil", "self", "Self", "super"];
+        let types = ["Int", "Int8", "Int16", "Int32", "Int64", "UInt", "UInt8", "UInt16", "UInt32", "UInt64",
+                    "Double", "Float", "Bool", "String", "Character", "Array", "Dictionary", "Set",
+                    "Optional", "Any", "AnyObject", "Void"];
         
         Self::advanced_tokenize(
             line,
