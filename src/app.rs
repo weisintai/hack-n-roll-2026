@@ -345,7 +345,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
                 "bool" => "bool",
                 _ => "Any",
             };
-            format!("def {}({}) -> {}:\n    # Write your solution here\n    pass\n", func_name, args.join(", "), ret_type)
+            format!("def {}({}) -> {}:\n    # Write your solution here\n    pass", func_name, args.join(", "), ret_type)
         },
         Language::JavaScript => {
             // Generate JS with JSDoc types
@@ -371,7 +371,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
                 "bool" => "boolean",
                 _ => "*",
             };
-            format!("/**\n{}\n * @returns {{{}}}\n */\nfunction {}({}) {{\n    // Write your solution here\n    \n}}\n",
+            format!("/**\n{}\n * @returns {{{}}}\n */\nfunction {}({}) {{\n    // Write your solution here\n    \n}}",
                 param_docs.join("\n"), ret_type, func_name, args.join(", "))
         },
         Language::TypeScript => {
@@ -383,7 +383,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
                 5 => ("n: number", "number"),
                 _ => ("...", "any")
             };
-            format!("function {}({}): {} {{\n    // Write your solution here\n    \n}}\n", func_name, args, ret)
+            format!("function {}({}): {} {{\n    // Write your solution here\n    \n}}", func_name, args, ret)
         },
         Language::Rust => {
             let (args, ret) = match problem.id {
@@ -396,7 +396,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
             };
             let ret_str = if ret.is_empty() { String::new() } else { format!(" -> {}", ret) };
             let body = if ret.is_empty() { "" } else { "    todo!()\n" };
-            format!("pub fn {}({}){} {{\n    // Write your solution here\n{}}}\n", func_name, args, ret_str, body)
+            format!("pub fn {}({}){} {{\n    // Write your solution here\n{}}}", func_name, args, ret_str, body)
         },
         Language::Go => {
             let (args, ret) = match problem.id {
@@ -416,7 +416,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
                 _ => ""
             };
             
-            format!("func {}({}){} {{\n    // Write your solution here\n{}}}\n", func_name, args, ret_str, return_stmt)
+            format!("func {}({}){} {{\n    // Write your solution here\n{}}}", func_name, args, ret_str, return_stmt)
         },
         Language::Java => {
             let (args, ret, return_stmt) = match problem.id {
@@ -428,7 +428,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
                 _ => ("...", "Object", "return null;")
             };
             
-            format!("public {} {}({}) {{\n    // Write your solution here\n    {}\n}}\n", ret, func_name, args, return_stmt)
+            format!("public {} {}({}) {{\n    // Write your solution here\n    {}\n}}", ret, func_name, args, return_stmt)
         },
         Language::Haskell => {
             let (args, ret) = match problem.id {
@@ -439,7 +439,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
                 5 => ("n", "Int -> Int"),
                 _ => ("...", "a -> b")
             };
-            format!("{} :: {}\n{} {} = \n    -- Write your solution here\n    undefined\n", func_name, ret, func_name, args)
+            format!("{} :: {}\n{} {} = \n    -- Write your solution here\n    undefined", func_name, ret, func_name, args)
         },
         Language::Lua => {
             // Generate Lua with type comments
@@ -465,7 +465,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
                 "bool" => "boolean",
                 _ => "any",
             };
-            format!("{}\n---@return {}\nfunction {}({})\n    -- Write your solution here\n    \nend\n",
+            format!("{}\n---@return {}\nfunction {}({})\n    -- Write your solution here\n    \nend",
                 type_comment.join("\n"), ret_type, func_name, args.join(", "))
         },
         Language::OCaml => {
@@ -477,7 +477,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
                 5 => ("n", "int -> int"),
                 _ => ("...", "'a -> 'b")
             };
-            format!("let {} {} : {} =\n  (* Write your solution here *)\n  failwith \"Not implemented\"\n", func_name, args, ret)
+            format!("let {} {} : {} =\n  (* Write your solution here *)\n  failwith \"Not implemented\"", func_name, args, ret)
         },
         Language::Elixir => {
             // Generate Elixir with @spec
@@ -502,7 +502,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
                 "bool" => "boolean()",
                 _ => "any()",
             };
-            format!("@spec {}({}) :: {}\ndef {}({}) do\n  # Write your solution here\n  \nend\n",
+            format!("@spec {}({}) :: {}\ndef {}({}) do\n  # Write your solution here\n  \nend",
                 func_name, param_types.join(", "), ret_type, func_name, args.join(", "))
         },
         Language::Kotlin => {
@@ -520,7 +520,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
             } else { 
                 format!("    // Write your solution here\n    {}\n", return_stmt)
             };
-            format!("fun {}({}){}{} {{\n{}}}\n", func_name, args, ret_prefix, ret, body)
+            format!("fun {}({}){}{} {{\n{}}}", func_name, args, ret_prefix, ret, body)
         },
         Language::Swift => {
             let (args, ret, return_stmt) = match problem.id {
@@ -537,7 +537,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
             } else {
                 format!("    // Write your solution here\n    {}\n", return_stmt)
             };
-            format!("func {}({}){} {{\n{}}}\n", func_name, args, ret_str, body)
+            format!("func {}({}){} {{\n{}}}", func_name, args, ret_str, body)
         },
     }
 }
