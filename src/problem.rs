@@ -59,6 +59,12 @@ pub struct TestCase {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Parameter {
+    pub name: String,
+    pub param_type: String,  // e.g., "int[]", "string", "int"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Problem {
     pub id: usize,
     pub title: String,
@@ -67,6 +73,8 @@ pub struct Problem {
     pub constraints: Vec<String>,
     pub test_cases: Vec<TestCase>,
     pub function_name: String,
+    pub parameters: Vec<Parameter>,
+    pub return_type: String,
 }
 
 impl Problem {
@@ -94,11 +102,26 @@ impl Problem {
         others.choose(&mut rng).unwrap().clone()
     }
 
+    /// Returns a type signature hint for the LLM, e.g.:
+    /// "function_name(param1: type1, param2: type2) -> return_type"
+    pub fn type_signature(&self) -> String {
+        let params: Vec<String> = self.parameters
+            .iter()
+            .map(|p| format!("{}: {}", p.name, p.param_type))
+            .collect();
+        format!("{}({}) -> {}", self.function_name, params.join(", "), self.return_type)
+    }
+
     pub fn two_sum() -> Self {
         Problem {
             id: 1,
             title: "1. Two Sum".to_string(),
             function_name: "two_sum".to_string(),
+            parameters: vec![
+                Parameter { name: "nums".to_string(), param_type: "int[]".to_string() },
+                Parameter { name: "target".to_string(), param_type: "int".to_string() },
+            ],
+            return_type: "int[]".to_string(),
             description: r#"Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
 
 You may assume that each input would have exactly one solution, and you may not use the same element twice.
@@ -148,6 +171,10 @@ Output: [0,1]"#.to_string(),
             id: 2,
             title: "2. Reverse String".to_string(),
             function_name: "reverse_string".to_string(),
+            parameters: vec![
+                Parameter { name: "s".to_string(), param_type: "char[]".to_string() },
+            ],
+            return_type: "char[]".to_string(),
             description: r#"Write a function that reverses a string.
 
 The input string is given as an array of characters s.
@@ -183,6 +210,10 @@ Output: ["h","a","n","n","a","H"]"#.to_string(),
             id: 3,
             title: "3. Fizz Buzz".to_string(),
             function_name: "fizz_buzz".to_string(),
+            parameters: vec![
+                Parameter { name: "n".to_string(), param_type: "int".to_string() },
+            ],
+            return_type: "string[]".to_string(),
             description: r#"Given an integer n, return a string array answer where:
 
 - answer[i] == "FizzBuzz" if i is divisible by 3 and 5.
@@ -225,6 +256,10 @@ Output: ["1","2","Fizz","4","Buzz","Fizz","7","8","Fizz","Buzz","11","Fizz","13"
             id: 4,
             title: "4. Valid Palindrome".to_string(),
             function_name: "is_palindrome".to_string(),
+            parameters: vec![
+                Parameter { name: "s".to_string(), param_type: "string".to_string() },
+            ],
+            return_type: "bool".to_string(),
             description: r#"A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward.
 
 Given a string s, return true if it is a palindrome, or false otherwise."#.to_string(),
@@ -268,6 +303,10 @@ Explanation: After removing non-alphanumeric chars, s is ""."#.to_string(),
             id: 5,
             title: "5. Fibonacci Number".to_string(),
             function_name: "fib".to_string(),
+            parameters: vec![
+                Parameter { name: "n".to_string(), param_type: "int".to_string() },
+            ],
+            return_type: "int".to_string(),
             description: r#"The Fibonacci numbers, commonly denoted F(n) form a sequence, called the Fibonacci sequence, such that each number is the sum of the two preceding ones, starting from 0 and 1.
 
 That is:
@@ -362,8 +401,9 @@ pub async fn run_tests_on_piston(
     // Convert to Python if not already Python
     let python_code = if language != Language::Python {
         send_log(format!("Converting {} to Python...", language.display_name()), false);
-        
-        let prompt = crate::languages::build_translation_prompt(&code, language, Language::Python);
+
+        let type_sig = problem.type_signature();
+        let prompt = crate::languages::build_translation_prompt_with_signature(&code, language, Language::Python, Some(&type_sig));
         match crate::llm::translate_code(&prompt).await {
             Ok(translated) => {
                 send_log("Conversion successful!".to_string(), false);

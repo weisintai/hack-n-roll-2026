@@ -69,8 +69,20 @@ impl Language {
     }
 }
 
-pub fn build_translation_prompt(code: &str, from: Language, to: Language) -> String {
+pub fn build_translation_prompt_with_signature(code: &str, from: Language, to: Language, type_signature: Option<&str>) -> String {
     let mut extra_rules = String::new();
+
+    // Add type signature hint if provided
+    if let Some(sig) = type_signature {
+        extra_rules.push_str(&format!(
+            r#"
+
+FUNCTION SIGNATURE (use these types for the target language):
+{}
+- Translate these types to idiomatic {} equivalents (e.g., int[] -> Vec<i32> in Rust, List[int] in Python, number[] in TypeScript)"#,
+            sig, to.display_name()
+        ));
+    }
 
     // Add target language specific syntax rules
     match to {

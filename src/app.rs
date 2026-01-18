@@ -9,7 +9,7 @@ use ratatui::{
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
-use crate::languages::{build_translation_prompt, Language};
+use crate::languages::{build_translation_prompt_with_signature, Language};
 use crate::llm;
 use crate::problem::{run_tests_on_piston, Problem, TestResults};
 use crate::syntax::SyntaxHighlighter;
@@ -323,22 +323,56 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
     
     match language {
         Language::Python => {
-            let args = match problem.id {
-                1 => "nums, target",
-                2 | 4 => "s",
-                3 | 5 => "n",
-                _ => "..."
+            // Generate typed Python: def func(param: type, ...) -> return_type:
+            let args: Vec<String> = problem.parameters.iter().map(|p| {
+                let py_type = match p.param_type.as_str() {
+                    "int" => "int",
+                    "int[]" => "list[int]",
+                    "string" => "str",
+                    "string[]" => "list[str]",
+                    "char[]" => "list[str]",
+                    "bool" => "bool",
+                    _ => "Any",
+                };
+                format!("{}: {}", p.name, py_type)
+            }).collect();
+            let ret_type = match problem.return_type.as_str() {
+                "int" => "int",
+                "int[]" => "list[int]",
+                "string" => "str",
+                "string[]" => "list[str]",
+                "char[]" => "list[str]",
+                "bool" => "bool",
+                _ => "Any",
             };
-            format!("def {}({}):\n    # Write your solution here\n    pass\n", func_name, args)
+            format!("def {}({}) -> {}:\n    # Write your solution here\n    pass\n", func_name, args.join(", "), ret_type)
         },
         Language::JavaScript => {
-            let args = match problem.id {
-                1 => "nums, target",
-                2 | 4 => "s",
-                3 | 5 => "n",
-                _ => "..."
+            // Generate JS with JSDoc types
+            let args: Vec<String> = problem.parameters.iter().map(|p| p.name.clone()).collect();
+            let param_docs: Vec<String> = problem.parameters.iter().map(|p| {
+                let js_type = match p.param_type.as_str() {
+                    "int" => "number",
+                    "int[]" => "number[]",
+                    "string" => "string",
+                    "string[]" => "string[]",
+                    "char[]" => "string[]",
+                    "bool" => "boolean",
+                    _ => "*",
+                };
+                format!(" * @param {{{}}} {}", js_type, p.name)
+            }).collect();
+            let ret_type = match problem.return_type.as_str() {
+                "int" => "number",
+                "int[]" => "number[]",
+                "string" => "string",
+                "string[]" => "string[]",
+                "char[]" => "string[]",
+                "bool" => "boolean",
+                _ => "*",
             };
-            format!("function {}({}) {{\n    // Write your solution here\n    \n}}\n", func_name, args)
+            format!("/**\n{}\n * @returns {{{}}}\n */\nfunction {}({}) {{\n    // Write your solution here\n    \n}}\n",
+                param_docs.join("\n"), ret_type, func_name, args.join(", "))
         },
         Language::TypeScript => {
             let (args, ret) = match problem.id {
@@ -408,13 +442,31 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
             format!("{} :: {}\n{} {} = \n    -- Write your solution here\n    undefined\n", func_name, ret, func_name, args)
         },
         Language::Lua => {
-            let args = match problem.id {
-                1 => "nums, target",
-                2 | 4 => "s",
-                3 | 5 => "n",
-                _ => "..."
+            // Generate Lua with type comments
+            let args: Vec<String> = problem.parameters.iter().map(|p| p.name.clone()).collect();
+            let type_comment: Vec<String> = problem.parameters.iter().map(|p| {
+                let lua_type = match p.param_type.as_str() {
+                    "int" => "number",
+                    "int[]" => "number[]",
+                    "string" => "string",
+                    "string[]" => "string[]",
+                    "char[]" => "string[]",
+                    "bool" => "boolean",
+                    _ => "any",
+                };
+                format!("---@param {} {}", p.name, lua_type)
+            }).collect();
+            let ret_type = match problem.return_type.as_str() {
+                "int" => "number",
+                "int[]" => "number[]",
+                "string" => "string",
+                "string[]" => "string[]",
+                "char[]" => "string[]",
+                "bool" => "boolean",
+                _ => "any",
             };
-            format!("function {}({})\n    -- Write your solution here\n    \nend\n", func_name, args)
+            format!("{}\n---@return {}\nfunction {}({})\n    -- Write your solution here\n    \nend\n",
+                type_comment.join("\n"), ret_type, func_name, args.join(", "))
         },
         Language::OCaml => {
             let (args, ret) = match problem.id {
@@ -428,13 +480,30 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
             format!("let {} {} : {} =\n  (* Write your solution here *)\n  failwith \"Not implemented\"\n", func_name, args, ret)
         },
         Language::Elixir => {
-            let args = match problem.id {
-                1 => "nums, target",
-                2 | 4 => "s",
-                3 | 5 => "n",
-                _ => "..."
+            // Generate Elixir with @spec
+            let args: Vec<String> = problem.parameters.iter().map(|p| p.name.clone()).collect();
+            let param_types: Vec<&str> = problem.parameters.iter().map(|p| {
+                match p.param_type.as_str() {
+                    "int" => "integer()",
+                    "int[]" => "list(integer())",
+                    "string" => "String.t()",
+                    "string[]" => "list(String.t())",
+                    "char[]" => "list(String.t())",
+                    "bool" => "boolean()",
+                    _ => "any()",
+                }
+            }).collect();
+            let ret_type = match problem.return_type.as_str() {
+                "int" => "integer()",
+                "int[]" => "list(integer())",
+                "string" => "String.t()",
+                "string[]" => "list(String.t())",
+                "char[]" => "list(String.t())",
+                "bool" => "boolean()",
+                _ => "any()",
             };
-            format!("def {}({}) do\n  # Write your solution here\n  \nend\n", func_name, args)
+            format!("@spec {}({}) :: {}\ndef {}({}) do\n  # Write your solution here\n  \nend\n",
+                func_name, param_types.join(", "), ret_type, func_name, args.join(", "))
         },
         Language::Kotlin => {
             let (args, ret, return_stmt) = match problem.id {
@@ -715,7 +784,8 @@ impl App {
             return;
         }
 
-        let prompt = build_translation_prompt(&code, from, to);
+        let type_sig = self.problem.type_signature();
+        let prompt = build_translation_prompt_with_signature(&code, from, to, Some(&type_sig));
         let (tx, rx) = mpsc::channel(1);
         self.translation_rx = Some(rx);
 
