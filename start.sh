@@ -1,15 +1,23 @@
 #!/bin/bash
-# Quick start script for Code Arcade
+# Terminal of Babel - Start Script
 
-echo "🎮⚡ Starting Code Arcade - Language Roulette ⚡🎮"
+clear
 echo ""
-echo "Controls:"
-echo "  - Type to edit code"
-echo "  - Arrow keys to navigate"
-echo "  - Cmd+S / Ctrl+S to submit"
-echo "  - Timer: 45 seconds until language randomize!"
+echo "  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+echo "  ┃        TERMINAL  of  BABEL          ┃"
+echo "  ┃    Code in any language. Survive.   ┃"
+echo "  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
 echo ""
-echo "Press any key to start..."
+echo "  Controls"
+echo "  ────────────────────────────"
+echo "    ^S  Submit solution"
+echo "    ^R  New problem"
+echo "    ^C  Compile and run"
+echo "    ^Q  Quit"
+echo ""
+echo "  The language changes every 45 seconds."
+echo ""
+echo "  Press any key to begin..."
 read -n 1
 
 cargo run --release

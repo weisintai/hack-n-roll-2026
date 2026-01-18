@@ -15,7 +15,7 @@ use crate::problem::{run_tests_on_piston, Problem, TestResults};
 use crate::syntax::SyntaxHighlighter;
 
 // Configuration constants
-const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 10;
+const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 30;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppState {
@@ -1473,52 +1473,64 @@ impl App {
     }
 
     fn render_header(&self, frame: &mut Frame, area: Rect) {
+        // Terminal of Babel - mystical ancient tower meets cyberpunk terminal
+        let border_color = Color::Rgb(139, 90, 43);  // Bronze/amber border
+        let title_color = Color::Rgb(255, 191, 0);   // Gold
+        let accent_color = Color::Rgb(147, 112, 219); // Medium purple
+
         let title = vec![
-            Span::styled("╔═══════════════════════════════════════╗", Style::default().fg(Color::Cyan)),
+            Span::styled("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓", Style::default().fg(border_color)),
             Span::raw("\n"),
-            Span::styled("║ ", Style::default().fg(Color::Cyan)),
-            Span::styled("⚡ CODE ARCADE ⚡ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::styled("LANGUAGE ROULETTE", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-            Span::styled(" ║", Style::default().fg(Color::Cyan)),
+            Span::styled("┃ ", Style::default().fg(border_color)),
+            Span::styled("◈ ", Style::default().fg(accent_color)),
+            Span::styled("TERMINAL ", Style::default().fg(title_color).add_modifier(Modifier::BOLD)),
+            Span::styled("of ", Style::default().fg(Color::Rgb(180, 180, 180))),
+            Span::styled("BABEL", Style::default().fg(title_color).add_modifier(Modifier::BOLD)),
+            Span::styled(" ◈", Style::default().fg(accent_color)),
+            Span::styled(" ┃", Style::default().fg(border_color)),
             Span::raw("\n"),
-            Span::styled("╚═══════════════════════════════════════╝", Style::default().fg(Color::Cyan)),
+            Span::styled("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛", Style::default().fg(border_color)),
         ];
-        
+
         let header = Paragraph::new(Line::from(title))
             .alignment(Alignment::Center);
-        
+
         frame.render_widget(header, area);
     }
 
     fn render_problem(&self, frame: &mut Frame, area: Rect) {
+        let title_color = Color::Rgb(255, 191, 0);   // Gold
+        let border_color = Color::Rgb(139, 90, 43);  // Bronze
+        let label_color = Color::Rgb(180, 140, 80);  // Warm amber
+
         let mut text = vec![
             Line::from(vec![
-                Span::styled(&self.problem.title, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(&self.problem.title, Style::default().fg(title_color).add_modifier(Modifier::BOLD)),
             ]),
             Line::from(""),
-            Line::from(Span::styled("Description:", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled("━━━ Description", Style::default().fg(label_color).add_modifier(Modifier::BOLD))),
             Line::from(""),
         ];
 
         for line in self.problem.description.lines() {
-            text.push(Line::from(Span::styled(line, Style::default().fg(Color::White))));
+            text.push(Line::from(Span::styled(line, Style::default().fg(Color::Rgb(220, 220, 220)))));
         }
 
         text.push(Line::from(""));
-        text.push(Line::from(Span::styled("Examples:", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
+        text.push(Line::from(Span::styled("━━━ Examples", Style::default().fg(label_color).add_modifier(Modifier::BOLD))));
         text.push(Line::from(""));
 
         for example in &self.problem.examples {
             for line in example.lines() {
-                text.push(Line::from(Span::styled(line, Style::default().fg(Color::Gray))));
+                text.push(Line::from(Span::styled(line, Style::default().fg(Color::Rgb(160, 160, 160)))));
             }
             text.push(Line::from(""));
         }
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Green))
-            .title(Span::styled(" PROBLEM ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)));
+            .border_style(Style::default().fg(border_color))
+            .title(Span::styled(" ◆ CHALLENGE ", Style::default().fg(title_color).add_modifier(Modifier::BOLD)));
 
         let paragraph = Paragraph::new(text)
             .block(block)
@@ -1607,11 +1619,12 @@ impl App {
             Line::from(spans)
         }).collect();
 
-        let title = format!(" EDITOR - {} ", self.current_language.display_name());
+        let title = format!(" ◇ {} ", self.current_language.display_name());
+        let panel_color = Color::Rgb(147, 112, 219); // Medium purple - matches header accent
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Magenta))
-            .title(Span::styled(title, Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)));
+            .border_style(Style::default().fg(panel_color))
+            .title(Span::styled(title, Style::default().fg(Color::Rgb(255, 191, 0)).add_modifier(Modifier::BOLD)));
 
         let paragraph = Paragraph::new(lines)
             .block(block)
@@ -1621,29 +1634,32 @@ impl App {
     }
 
     fn render_output_panel(&self, frame: &mut Frame, area: Rect) {
+        let bronze = Color::Rgb(139, 90, 43);
+        let gold = Color::Rgb(255, 191, 0);
+
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(" Output (^C to run) ")
-            .border_style(Style::default().fg(Color::Green));
-            
+            .title(Span::styled(" ▸ Output ", Style::default().fg(gold).add_modifier(Modifier::BOLD)))
+            .border_style(Style::default().fg(bronze));
+
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
 
         let lines: Vec<Line> = self.execution_output.iter().map(|line| {
             Line::from(Span::styled(
-                &line.text, 
-                if line.is_error { 
-                    Style::default().fg(Color::Red) 
-                } else { 
-                    Style::default().fg(Color::White) 
+                &line.text,
+                if line.is_error {
+                    Style::default().fg(Color::Rgb(255, 100, 100))
+                } else {
+                    Style::default().fg(Color::Rgb(200, 200, 200))
                 }
             ))
         }).collect();
-        
+
         let paragraph = Paragraph::new(lines)
             .wrap(Wrap { trim: false })
             .scroll((self.scroll_offset as u16, 0));
-            
+
         frame.render_widget(paragraph, inner_area);
     }
 
@@ -1651,48 +1667,43 @@ impl App {
         let elapsed = self.last_randomize.elapsed();
         let remaining = self.randomize_interval.saturating_sub(elapsed);
         let secs = remaining.as_secs();
-        
+
+        // Theme colors
+        let gold = Color::Rgb(255, 191, 0);
+        let purple = Color::Rgb(147, 112, 219);
+        let bronze = Color::Rgb(139, 90, 43);
+        let text_dim = Color::Rgb(140, 140, 140);
+
         let timer_color = if secs < 10 {
-            Color::Red
+            Color::Rgb(255, 80, 80)  // Soft red
         } else if secs < 20 {
-            Color::Yellow
+            Color::Rgb(255, 200, 80) // Warm yellow
         } else {
-            Color::Green
+            Color::Rgb(100, 200, 130) // Soft green
         };
 
         let mut footer_spans = vec![
-            Span::styled("⏱ ", Style::default().fg(Color::Cyan)),
+            Span::styled("⧗ ", Style::default().fg(bronze)),
             Span::styled(format!("{}s", secs), Style::default().fg(timer_color).add_modifier(Modifier::BOLD)),
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("^S ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::styled("Submit", Style::default().fg(Color::White)),
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("^R ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-            Span::styled("New Problem", Style::default().fg(Color::White)),
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("^A/E ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::styled("Line", Style::default().fg(Color::White)),
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Alt+←/→ ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            Span::styled("Word", Style::default().fg(Color::White)),
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("^C ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            Span::styled("Compile", Style::default().fg(Color::White)),
-            Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("^Q ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-            Span::styled("Quit", Style::default().fg(Color::White)),
+            Span::styled(" ┃ ", Style::default().fg(bronze)),
+            Span::styled("^S", Style::default().fg(gold).add_modifier(Modifier::BOLD)),
+            Span::styled(" Submit ", Style::default().fg(text_dim)),
+            Span::styled("^R", Style::default().fg(purple).add_modifier(Modifier::BOLD)),
+            Span::styled(" New ", Style::default().fg(text_dim)),
+            Span::styled("^C", Style::default().fg(purple).add_modifier(Modifier::BOLD)),
+            Span::styled(" Run ", Style::default().fg(text_dim)),
+            Span::styled("^Q", Style::default().fg(Color::Rgb(180, 80, 80)).add_modifier(Modifier::BOLD)),
+            Span::styled(" Quit", Style::default().fg(text_dim)),
         ];
-        
-        if self.show_output_panel {
-            footer_spans.push(Span::styled("Run", Style::default().fg(Color::White)));
-        } else {
-            footer_spans.push(Span::styled("Run & Show Output", Style::default().fg(Color::White)));
+
+        if !self.show_output_panel {
+            footer_spans.push(Span::styled(" ┃ ", Style::default().fg(bronze)));
+            footer_spans.push(Span::styled("Output hidden", Style::default().fg(Color::Rgb(100, 100, 100))));
         }
 
         let footer = Paragraph::new(Line::from(footer_spans))
-            .alignment(Alignment::Center)
-            .style(Style::default().bg(Color::Black));
-        
+            .alignment(Alignment::Center);
+
         frame.render_widget(footer, area);
     }
 
