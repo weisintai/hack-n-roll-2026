@@ -72,7 +72,7 @@ async fn run_app<B: ratatui::backend::Backend>(
         if let Some(ref mut player) = audio_player {
             let is_countdown = matches!(app.state, AppState::Countdown(_));
             let is_transitioning = matches!(app.state, AppState::Transitioning(_));
-            let is_submitting = matches!(app.state, AppState::Compiling(_) | AppState::Running | AppState::Results(_));
+            let is_submitting = matches!(app.state, AppState::Submitting(_, _) | AppState::Results(_));
             
             // Language revealed during reveal phase (progress > 0.65)
             let language_revealed = match app.state {
