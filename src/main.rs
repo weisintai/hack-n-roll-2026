@@ -122,6 +122,13 @@ async fn run_app<B: ratatui::backend::Backend>(
                             && (key.code == KeyCode::Char('q') || key.code == KeyCode::Char('Q')) {
                             return Ok(());
                         }
+                        
+                        // Quit from menu screen with Q
+                        if matches!(app.state, AppState::Menu) {
+                            if key.code == KeyCode::Char('q') || key.code == KeyCode::Char('Q') {
+                                return Ok(());
+                            }
+                        }
 
                         // Quit from results screen
                         if matches!(app.state, AppState::Results(_)) {
@@ -130,7 +137,7 @@ async fn run_app<B: ratatui::backend::Backend>(
                                 if let Some(ref mut player) = audio_player {
                                     player.stop();
                                 }
-                                return Ok(());
+                                // Return to menu instead of quitting
                             }
                             // Stop audio on restart (R key)
                             if key.code == KeyCode::Enter || key.code == KeyCode::Char('r') {

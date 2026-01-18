@@ -19,6 +19,9 @@ const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 15;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppState {
+    Menu,               // Main menu screen
+    Instructions,       // Instructions/help screen
+    SelectingLanguage,  // Language selection screen
     Coding,
     Countdown(u8),           // 5, 4, 3, 2, 1
     Transitioning(f32),      // 0.0 to 1.0 progress (glitch effect)
@@ -26,6 +29,27 @@ pub enum AppState {
     Compiling(f32),     // 0.0 to 1.0 progress (simulated)
     Running,            // Executing on Piston
     Results(TestResults),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MenuOption {
+    Start,
+    Instructions,
+    ChooseLanguage,
+}
+
+impl MenuOption {
+    pub fn all() -> [MenuOption; 3] {
+        [MenuOption::Start, MenuOption::Instructions, MenuOption::ChooseLanguage]
+    }
+    
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            MenuOption::Start => "Start Game",
+            MenuOption::Instructions => "Instructions",
+            MenuOption::ChooseLanguage => "Choose Language",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -567,6 +591,10 @@ pub struct App {
     pub translation_rx: Option<mpsc::Receiver<TranslationEvent>>,
     pub pending_translation: Option<TranslationEvent>,
     pub code_sent_for_translation: Option<String>,
+    
+    // Menu state
+    pub menu_selection: MenuOption,
+    pub language_selection_index: usize,  // Track selected language in language selection screen
 }
 
 impl App {
@@ -579,7 +607,7 @@ impl App {
             code: get_starter_code(&problem, current_language),
             cursor_position: 0,
             current_language,
-            state: AppState::Coding,
+            state: AppState::Menu,  // Start at menu
             last_randomize: Instant::now(),
             randomize_interval: Duration::from_secs(LANGUAGE_CHANGE_INTERVAL_SECS),
             test_results: None,
@@ -597,7 +625,41 @@ impl App {
             translation_rx: None,
             pending_translation: None,
             code_sent_for_translation: None,
+            // Menu state
+            menu_selection: MenuOption::Start,
+            language_selection_index: 0,
         }
+    }
+    
+    /// Reset and start a new game from menu
+    fn start_game(&mut self) {
+        let problem = Problem::random();
+        
+        self.problem = problem.clone();
+        self.code = get_starter_code(&problem, self.current_language);
+        self.cursor_position = 0;
+        self.state = AppState::Coding;
+        self.last_randomize = Instant::now();
+        self.randomize_interval = Duration::from_secs(15);
+        self.test_results = None;
+        self.scroll_offset = 0;
+        self.transition_start = None;
+        self.countdown_start = None;
+        self.pending_language = None;
+        self.pending_problem = None;
+        self.translation_rx = None;
+        self.pending_translation = None;
+        self.code_sent_for_translation = None;
+        self.execution_output.clear();
+        self.show_output_panel = false;
+        self.execution_progress = 0.0;
+        self.output_rx = None;
+    }
+    
+    /// Return to menu screen
+    fn return_to_menu(&mut self) {
+        self.state = AppState::Menu;
+        self.menu_selection = MenuOption::Start;
     }
 
     pub fn tick(&mut self) {
@@ -853,9 +915,92 @@ impl App {
 
     pub fn handle_key(&mut self, key: KeyEvent) {
         match self.state {
+            AppState::Menu => self.handle_menu_key(key),
+            AppState::Instructions => self.handle_instructions_key(key),
+            AppState::SelectingLanguage => self.handle_language_selection_key(key),
             AppState::Coding | AppState::Countdown(_) => self.handle_coding_key(key),
             AppState::Results(_) => self.handle_results_key(key),
              _ => {}, // Ignore input during transitions and execution
+        }
+    }
+    
+    fn handle_menu_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                // Move selection up
+                let options = MenuOption::all();
+                let current_idx = options.iter().position(|o| *o == self.menu_selection).unwrap_or(0);
+                if current_idx > 0 {
+                    self.menu_selection = options[current_idx - 1];
+                } else {
+                    self.menu_selection = options[options.len() - 1]; // Wrap to bottom
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                // Move selection down
+                let options = MenuOption::all();
+                let current_idx = options.iter().position(|o| *o == self.menu_selection).unwrap_or(0);
+                if current_idx < options.len() - 1 {
+                    self.menu_selection = options[current_idx + 1];
+                } else {
+                    self.menu_selection = options[0]; // Wrap to top
+                }
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                match self.menu_selection {
+                    MenuOption::Start => self.start_game(),
+                    MenuOption::Instructions => self.state = AppState::Instructions,
+                    MenuOption::ChooseLanguage => {
+                        self.state = AppState::SelectingLanguage;
+                        self.language_selection_index = Language::all().iter().position(|l| l == &self.current_language).unwrap_or(0);
+                    }
+                }
+            }
+            // Quick start
+            KeyCode::Char('s') | KeyCode::Char('S') => self.start_game(),
+            // Instructions
+            KeyCode::Char('i') | KeyCode::Char('I') => self.state = AppState::Instructions,
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
+                // Let main.rs handle quit - do nothing here
+            }
+            _ => {}
+        }
+    }
+    
+    fn handle_instructions_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char(' ') => {
+                self.state = AppState::Menu;
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_language_selection_key(&mut self, key: KeyEvent) {
+        let languages = Language::all();
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.language_selection_index > 0 {
+                    self.language_selection_index -= 1;
+                } else {
+                    self.language_selection_index = languages.len() - 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.language_selection_index < languages.len() - 1 {
+                    self.language_selection_index += 1;
+                } else {
+                    self.language_selection_index = 0;
+                }
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                self.current_language = languages[self.language_selection_index];
+                self.state = AppState::Menu;
+            }
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
+                self.state = AppState::Menu;
+            }
+            _ => {}
         }
     }
 
@@ -1023,6 +1168,9 @@ impl App {
                 KeyCode::Down => {
                     self.move_cursor_down();
                 }
+                KeyCode::Esc => {
+                    self.return_to_menu();
+                }
                 _ => {}
             }
         }
@@ -1030,18 +1178,13 @@ impl App {
 
     fn handle_results_key(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Enter | KeyCode::Char('r') => {
-                // Restart with same problem and code - just go back to coding
-                self.state = AppState::Coding;
-                self.test_results = None;
-                self.execution_output.clear();
-                self.show_output_panel = false;
-                self.execution_progress = 0.0;
-                self.output_rx = None;
-                self.last_randomize = Instant::now(); // Reset timer
+            KeyCode::Enter | KeyCode::Char('r') | KeyCode::Char('R') => {
+                // Return to menu
+                self.return_to_menu();
             }
-            KeyCode::Esc | KeyCode::Char('q') => {
-                // Keep results visible, could add exit logic here
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Char('m') | KeyCode::Char('M') => {
+                // Return to menu
+                self.return_to_menu();
             }
             _ => {}
         }
@@ -1436,6 +1579,9 @@ impl App {
 
     pub fn render(&mut self, frame: &mut Frame) {
         match &self.state {
+            AppState::Menu => self.render_menu(frame),
+            AppState::Instructions => self.render_instructions(frame),
+            AppState::SelectingLanguage => self.render_language_selection(frame),
             AppState::Coding => self.render_coding(frame),
             AppState::Countdown(count) => self.render_countdown(frame, *count),
             AppState::Transitioning(progress) => self.render_transition(frame, *progress),
@@ -1444,6 +1590,166 @@ impl App {
             AppState::Running => self.render_running(frame),
             AppState::Results(results) => self.render_results(frame, results),
         }
+    }
+    
+    fn render_menu(&self, frame: &mut Frame) {
+        let size = frame.size();
+        
+        // Theme colors
+        let gold = Color::Rgb(255, 191, 0);
+        let bronze = Color::Rgb(139, 90, 43);
+        let purple = Color::Rgb(147, 112, 219);
+        let dim = Color::Rgb(120, 120, 120);
+        let highlight_bg = Color::Rgb(50, 40, 60);
+        
+        // Main layout
+        let main_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(12),  // Title
+                Constraint::Length(2),   // Spacing
+                Constraint::Length(12),  // Menu options
+                Constraint::Length(2),   // Spacing
+                Constraint::Min(0),      // Instructions/footer
+            ])
+            .split(centered_rect(70, 80, size));
+        
+        // Big ASCII title
+        let title_lines = vec![
+            Line::from(Span::styled("╔══════════════════════════════════════════════════════════════╗", Style::default().fg(bronze))),
+            Line::from(vec![
+                Span::styled("║     ", Style::default().fg(bronze)),
+                Span::styled("                ◈ ", Style::default().fg(purple)),
+                Span::styled("TERMINAL ", Style::default().fg(gold).add_modifier(Modifier::BOLD)),
+                Span::styled("of ", Style::default().fg(Color::Rgb(180, 180, 180))),
+                Span::styled("BABEL", Style::default().fg(gold).add_modifier(Modifier::BOLD)),
+                Span::styled(" ◈                ", Style::default().fg(purple)),
+                Span::styled("    ║", Style::default().fg(bronze)),
+            ]),
+            Line::from(Span::styled("╠══════════════════════════════════════════════════════════════╣", Style::default().fg(bronze))),
+            Line::from(vec![
+                Span::styled("║", Style::default().fg(bronze)),
+                Span::styled("  Code. Survive the language roulette. Don't go insane.       ", Style::default().fg(dim).add_modifier(Modifier::ITALIC)),
+                Span::styled("║", Style::default().fg(bronze)),
+            ]),
+            Line::from(Span::styled("╚══════════════════════════════════════════════════════════════╝", Style::default().fg(bronze))),
+        ];
+        
+        let title = Paragraph::new(title_lines).alignment(Alignment::Center);
+        frame.render_widget(title, main_chunks[0]);
+        
+        // Menu options
+        let options = MenuOption::all();
+        let mut menu_lines = vec![Line::from("")];
+        
+        for option in options.iter() {
+            let is_selected = *option == self.menu_selection;
+            let prefix = if is_selected { "▶ " } else { "  " };
+            
+            let option_text = format!("{}{}", prefix, option.display_name());
+            
+            let style = if is_selected {
+                Style::default().fg(gold).bg(highlight_bg).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Rgb(200, 200, 200))
+            };
+            
+            menu_lines.push(Line::from(Span::styled(format!("    {}    ", option_text), style)));
+            menu_lines.push(Line::from(""));
+        }
+        
+        let menu = Paragraph::new(menu_lines)
+            .alignment(Alignment::Center)
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(purple))
+                .title(Span::styled(" MENU ", Style::default().fg(gold).add_modifier(Modifier::BOLD))));
+        frame.render_widget(menu, main_chunks[2]);
+        
+        // Controls footer
+        let footer_lines = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("↑↓", Style::default().fg(gold).add_modifier(Modifier::BOLD)),
+                Span::styled(" Navigate  ", Style::default().fg(dim)),
+                Span::styled("Enter", Style::default().fg(gold).add_modifier(Modifier::BOLD)),
+                Span::styled(" Select  ", Style::default().fg(dim)),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("S", Style::default().fg(gold).add_modifier(Modifier::BOLD)),
+                Span::styled(" Quick Start  ", Style::default().fg(dim)),
+                Span::styled("I", Style::default().fg(purple).add_modifier(Modifier::BOLD)),
+                Span::styled(" Instructions  ", Style::default().fg(dim)),
+                Span::styled("Q", Style::default().fg(Color::Rgb(180, 80, 80)).add_modifier(Modifier::BOLD)),
+                Span::styled(" Quit", Style::default().fg(dim)),
+            ]),
+        ];
+        
+        let footer = Paragraph::new(footer_lines).alignment(Alignment::Center);
+        frame.render_widget(footer, main_chunks[4]);
+    }
+    
+    fn render_instructions(&self, frame: &mut Frame) {
+        let size = frame.size();
+        
+        // Theme colors
+        let gold = Color::Rgb(255, 191, 0);
+        let bronze = Color::Rgb(139, 90, 43);
+        let purple = Color::Rgb(147, 112, 219);
+        let dim = Color::Rgb(140, 140, 140);
+        let text = Color::Rgb(220, 220, 220);
+        
+        let area = centered_rect(80, 85, size);
+        
+        let instructions = vec![
+            Line::from(""),
+            Line::from(Span::styled("═══ HOW TO PLAY ═══", Style::default().fg(gold).add_modifier(Modifier::BOLD))),
+            Line::from(""),
+            Line::from(Span::styled("1. You'll be given a coding problem to solve", Style::default().fg(text))),
+            Line::from(Span::styled("2. Write your solution in the code editor", Style::default().fg(text))),
+            Line::from(Span::styled("3. Every 15 seconds, your code transforms into a RANDOM LANGUAGE", Style::default().fg(purple).add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled("4. Keep coding! Your logic is preserved (mostly...)", Style::default().fg(text))),
+            Line::from(Span::styled("5. Submit when ready to test your solution", Style::default().fg(text))),
+            Line::from(""),
+            Line::from(Span::styled("═══ CONTROLS ═══", Style::default().fg(gold).add_modifier(Modifier::BOLD))),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("  ^S  ", Style::default().fg(gold).add_modifier(Modifier::BOLD)),
+                Span::styled("Submit solution for testing", Style::default().fg(dim)),
+            ]),
+            Line::from(vec![
+                Span::styled("  ^R  ", Style::default().fg(purple).add_modifier(Modifier::BOLD)),
+                Span::styled("Get a new random problem", Style::default().fg(dim)),
+            ]),
+            Line::from(vec![
+                Span::styled("  ^C  ", Style::default().fg(purple).add_modifier(Modifier::BOLD)),
+                Span::styled("Run code without submitting", Style::default().fg(dim)),
+            ]),
+            Line::from(vec![
+                Span::styled("  Esc ", Style::default().fg(Color::Rgb(180, 80, 80)).add_modifier(Modifier::BOLD)),
+                Span::styled("Return to menu", Style::default().fg(dim)),
+            ]),
+            Line::from(""),
+            Line::from(Span::styled("═══ SUPPORTED LANGUAGES ═══", Style::default().fg(gold).add_modifier(Modifier::BOLD))),
+            Line::from(""),
+            Line::from(Span::styled("  Python • JavaScript • TypeScript • Rust • Go • Java", Style::default().fg(purple))),
+            Line::from(Span::styled("  Haskell • Lua • OCaml • Elixir • Kotlin • Swift", Style::default().fg(purple))),
+            Line::from(""),
+            Line::from(""),
+            Line::from(Span::styled("Press any key to return to menu...", Style::default().fg(dim).add_modifier(Modifier::ITALIC))),
+        ];
+        
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(bronze))
+            .title(Span::styled(" ◈ INSTRUCTIONS ◈ ", Style::default().fg(gold).add_modifier(Modifier::BOLD)));
+        
+        let paragraph = Paragraph::new(instructions)
+            .block(block)
+            .alignment(Alignment::Center);
+        
+        frame.render_widget(paragraph, area);
     }
     
     fn render_compiling(&self, frame: &mut Frame, progress: f32) {
@@ -1548,6 +1854,95 @@ impl App {
         frame.render_widget(paragraph, chunks[1]);
     }
 
+    fn render_language_selection(&self, frame: &mut Frame) {
+        let size = frame.size();
+        
+        // Theme colors
+        let gold = Color::Rgb(255, 191, 0);
+        let bronze = Color::Rgb(139, 90, 43);
+        let purple = Color::Rgb(147, 112, 219);
+        let dim = Color::Rgb(120, 120, 120);
+        let highlight_bg = Color::Rgb(50, 40, 60);
+        
+        // Main layout
+        let main_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(5),   // Title
+                Constraint::Length(1),   // Spacing
+                Constraint::Min(0),      // Language list
+                Constraint::Length(3),   // Footer
+            ])
+            .split(centered_rect(60, 80, size));
+        
+        // Title
+        let title_lines = vec![
+            Line::from(Span::styled("╔════════════════════════════════════════╗", Style::default().fg(bronze))),
+            Line::from(vec![
+                Span::styled("║", Style::default().fg(bronze)),
+                Span::styled("      Choose Starting Language      ", Style::default().fg(gold).add_modifier(Modifier::BOLD)),
+                Span::styled("║", Style::default().fg(bronze)),
+            ]),
+            Line::from(Span::styled("╚════════════════════════════════════════╝", Style::default().fg(bronze))),
+        ];
+        
+        let title = Paragraph::new(title_lines).alignment(Alignment::Center);
+        frame.render_widget(title, main_chunks[0]);
+        
+        // Language list
+        let languages = Language::all();
+        let mut language_lines = vec![Line::from("")];
+        
+        for (idx, language) in languages.iter().enumerate() {
+            let is_selected = idx == self.language_selection_index;
+            let prefix = if is_selected { "▶ " } else { "  " };
+            let lang_name = match language {
+                Language::JavaScript => "JavaScript",
+                Language::TypeScript => "TypeScript",
+                Language::Python => "Python",
+                Language::Rust => "Rust",
+                Language::Go => "Go",
+                Language::Java => "Java",
+                Language::Haskell => "Haskell",
+                Language::Lua => "Lua",
+                Language::OCaml => "OCaml",
+                Language::Elixir => "Elixir",
+                Language::Kotlin => "Kotlin",
+                Language::Swift => "Swift",
+            };
+            
+            let style = if is_selected {
+                Style::default().fg(gold).bg(highlight_bg).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Rgb(200, 200, 200))
+            };
+            
+            language_lines.push(Line::from(Span::styled(format!("    {}{}    ", prefix, lang_name), style)));
+            language_lines.push(Line::from(""));
+        }
+        
+        let language_list = Paragraph::new(language_lines)
+            .alignment(Alignment::Center)
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(purple)));
+        frame.render_widget(language_list, main_chunks[2]);
+        
+        // Footer controls
+        let footer_lines = vec![
+            Line::from(vec![
+                Span::styled("↑↓", Style::default().fg(gold).add_modifier(Modifier::BOLD)),
+                Span::styled(" Navigate  ", Style::default().fg(dim)),
+                Span::styled("Enter", Style::default().fg(gold).add_modifier(Modifier::BOLD)),
+                Span::styled(" Select  ", Style::default().fg(dim)),
+                Span::styled("Esc", Style::default().fg(purple).add_modifier(Modifier::BOLD)),
+                Span::styled(" Back", Style::default().fg(dim)),
+            ]),
+        ];
+        
+        let footer = Paragraph::new(footer_lines).alignment(Alignment::Center);
+        frame.render_widget(footer, main_chunks[3]);
+    }
 
     fn render_coding(&mut self, frame: &mut Frame) {
         let size = frame.size();
@@ -1826,8 +2221,8 @@ impl App {
             Span::styled(" New ", Style::default().fg(text_dim)),
             Span::styled("^C", Style::default().fg(purple).add_modifier(Modifier::BOLD)),
             Span::styled(" Run ", Style::default().fg(text_dim)),
-            Span::styled("^Q", Style::default().fg(Color::Rgb(180, 80, 80)).add_modifier(Modifier::BOLD)),
-            Span::styled(" Quit", Style::default().fg(text_dim)),
+            Span::styled("Esc", Style::default().fg(Color::Rgb(180, 80, 80)).add_modifier(Modifier::BOLD)),
+            Span::styled(" Menu", Style::default().fg(text_dim)),
         ];
 
         if !self.show_output_panel {
@@ -2499,7 +2894,7 @@ impl App {
         main_text.push(Line::from(""));
         main_text.push(Line::from(""));
         main_text.push(Line::from(""));
-        main_text.push(Line::from(Span::styled("Press 'R' to restart  •  Press 'Q' to quit", Style::default().fg(Color::Rgb(255, 165, 0)))));
+        main_text.push(Line::from(Span::styled("Press Enter or any key to return to menu", Style::default().fg(Color::Rgb(255, 165, 0)))));
 
         let main_block = Block::default()
             .borders(Borders::ALL)
