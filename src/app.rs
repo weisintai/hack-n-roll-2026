@@ -25,6 +25,7 @@ pub enum AppState {
     Revealing(f32),          // 0.0 to 1.0 progress (reveal new language/problem)
     Compiling(f32),     // 0.0 to 1.0 progress (simulated)
     Running,            // Executing on Piston
+    RevealingResults(f32, TestResults), // 0.0 to 1.0 progress with results
     Results(TestResults),
 }
 
@@ -586,13 +587,38 @@ impl App {
                 }
             }
             AppState::Compiling(mut progress) => {
-                // Simulate compilation progress
-                progress += 0.02;
+                // Simulate compilation progress - faster at start, slower at end
+                let increment = if progress < 0.3 {
+                    0.03  // Fast at start
+                } else if progress < 0.7 {
+                    0.02  // Medium in middle
+                } else {
+                    0.015 // Slower at end
+                };
+                progress += increment;
                 if progress >= 1.0 {
                     self.state = AppState::Running;
                     self.execution_progress = 0.0;
                 } else {
                     self.state = AppState::Compiling(progress);
+                }
+            }
+            AppState::Running => {
+                // Animate execution progress (will be overridden when results arrive)
+                // Use a slower, steadier increment since API calls are unpredictable
+                self.execution_progress += 0.015;
+                // Cap at 95% until we get actual results
+                if self.execution_progress > 0.95 {
+                    self.execution_progress = 0.95;
+                }
+            }
+            AppState::RevealingResults(mut progress, ref results) => {
+                // Animate results reveal
+                progress += 0.03;
+                if progress >= 1.0 {
+                    self.state = AppState::Results(results.clone());
+                } else {
+                    self.state = AppState::RevealingResults(progress, results.clone());
                 }
             }
             _ => {}
@@ -611,9 +637,9 @@ impl App {
                         }
                     }
                     ExecutionEvent::Finished(results) => {
-                        // Submit mode - show full results screen
+                        // Submit mode - show full results screen with animation
                         self.test_results = Some(results.clone());
-                        self.state = AppState::Results(results);
+                        self.state = AppState::RevealingResults(0.0, results);
                         should_close = true;
                     }
                     ExecutionEvent::RunFinished(results) => {
@@ -1372,6 +1398,7 @@ impl App {
             AppState::Revealing(progress) => self.render_reveal(frame, *progress),
             AppState::Compiling(progress) => self.render_compiling(frame, *progress),
             AppState::Running => self.render_running(frame),
+            AppState::RevealingResults(progress, results) => self.render_revealing_results(frame, *progress, results),
             AppState::Results(results) => self.render_results(frame, results),
         }
     }
@@ -1407,75 +1434,197 @@ impl App {
         .alignment(Alignment::Center);
         frame.render_widget(status, chunks[0]);
 
-        let gauge = Gauge::default()
-            .gauge_style(Style::default().fg(purple).bg(Color::Rgb(40, 40, 40)))
-            .percent((progress * 100.0) as u16)
-            .label(Span::styled(
-                format!("{}%", (progress * 100.0) as u16),
+        let percent_val = (progress * 100.0) as u16;
+        
+        // Simple text display for debugging
+        let text = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                format!("COMPILING: {}%", percent_val),
                 Style::default().fg(gold).add_modifier(Modifier::BOLD)
-            ));
-        frame.render_widget(gauge, chunks[1]);
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                format!("Progress: {}", "=".repeat((percent_val as usize).min(40))),
+                Style::default().fg(purple)
+            )),
+        ];
+        
+        let widget = Paragraph::new(text).alignment(Alignment::Center);
+        frame.render_widget(widget, chunks[1]);
     }
 
-    fn render_running(&self, frame: &mut Frame) {
+    fn render_revealing_results(&self, frame: &mut Frame, progress: f32, results: &TestResults) {
         let size = frame.size();
-        let area = centered_rect(70, 50, size);
+        let area = centered_rect(60, 14, size);
 
         // Theme colors
         let gold = Color::Rgb(255, 191, 0);
         let bronze = Color::Rgb(139, 90, 43);
         let purple = Color::Rgb(147, 112, 219);
-        let dim = Color::Rgb(100, 100, 100);
+
+        let score_percent = (results.passed as f32 / results.total as f32 * 100.0) as u8;
+        let gauge_color = if score_percent == 100 {
+            gold
+        } else if score_percent >= 80 {
+            Color::Rgb(100, 200, 130)
+        } else if score_percent >= 50 {
+            Color::Rgb(255, 200, 80)
+        } else {
+            Color::Rgb(255, 100, 100)
+        };
 
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(bronze))
-            .title(Span::styled(" ▸ Execution ", Style::default().fg(gold).add_modifier(Modifier::BOLD)));
+            .title(Span::styled(" ◆ JUDGEMENT ◆ ", Style::default().fg(gold).add_modifier(Modifier::BOLD)));
 
-        let inner_area = block.inner(area);
+        let inner = block.inner(area);
         frame.render_widget(block, area);
 
-        // Split into header + log area
+        // Layout: status texts (multiple lines) + gauge
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(3), Constraint::Min(0)])
-            .split(inner_area);
+            .margin(1)
+            .constraints([Constraint::Min(4), Constraint::Length(3)])
+            .split(inner);
 
-        // Header with language info
-        let header = Paragraph::new(vec![
+        // Game-style loading text that changes based on progress
+        let loading_texts = if score_percent == 100 {
+            vec![
+                "The tower acknowledges your mastery...",
+                "Ancient glyphs illuminate in gold...",
+                "The babel spirits rejoice...",
+                "Perfect harmony achieved...",
+            ]
+        } else if score_percent >= 80 {
+            vec![
+                "The tower approves your progress...",
+                "Mystical runes glow with approval...",
+                "Your skill grows stronger...",
+                "The challenge yields to your wisdom...",
+            ]
+        } else if score_percent >= 50 {
+            vec![
+                "The tower measures your efforts...",
+                "Ancient symbols flicker in contemplation...",
+                "Partial understanding granted...",
+                "Continue your ascent...",
+            ]
+        } else {
+            vec![
+                "The tower remains unconquered...",
+                "Ancient barriers hold firm...",
+                "The path forward is unclear...",
+                "But the tower endures...",
+            ]
+        };
+
+        let text_index = ((progress * loading_texts.len() as f32) as usize).min(loading_texts.len() - 1);
+        
+        let status_lines = vec![
+            Line::from(Span::styled("", Style::default())),
             Line::from(vec![
-                Span::styled("Language: ", Style::default().fg(dim)),
-                Span::styled(self.current_language.display_name(), Style::default().fg(purple).add_modifier(Modifier::BOLD)),
-                Span::styled("  │  ", Style::default().fg(bronze)),
-                Span::styled("Status: ", Style::default().fg(dim)),
-                Span::styled("Running tests", Style::default().fg(Color::Rgb(100, 200, 130))),
+                Span::styled("◇ ", Style::default().fg(purple)),
+                Span::styled(loading_texts[text_index], Style::default().fg(Color::Rgb(180, 180, 180))),
+                Span::styled(" ◇", Style::default().fg(purple)),
             ]),
-            Line::from(Span::styled("────────────────────────────────────────────────────────", Style::default().fg(bronze))),
-        ]);
-        frame.render_widget(header, chunks[0]);
+            Line::from(Span::styled("", Style::default())),
+        ];
+        
+        let status = Paragraph::new(status_lines)
+            .alignment(Alignment::Center);
+        frame.render_widget(status, chunks[0]);
 
-        // Log output
-        let lines: Vec<Line> = self.execution_output.iter().map(|line| {
-            let prefix = if line.is_error { "✗ " } else { "› " };
-            let prefix_color = if line.is_error { Color::Rgb(255, 100, 100) } else { Color::Rgb(100, 100, 100) };
+        let percent_val = (progress * 100.0) as u16;
+        
+        // Simple text display for debugging
+        let text = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                format!("ANALYZING: {}%", percent_val),
+                Style::default().fg(gold).add_modifier(Modifier::BOLD)
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                format!("Progress: {}", "=".repeat((percent_val as usize).min(40))),
+                Style::default().fg(gauge_color)
+            )),
+        ];
+        
+        let widget = Paragraph::new(text).alignment(Alignment::Center);
+        frame.render_widget(widget, chunks[1]);
+    }
+
+    fn render_running(&self, frame: &mut Frame) {
+        let size = frame.size();
+        let area = centered_rect(60, 14, size);
+
+        // Theme colors
+        let gold = Color::Rgb(255, 191, 0);
+        let bronze = Color::Rgb(139, 90, 43);
+        let purple = Color::Rgb(147, 112, 219);
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(bronze))
+            .title(Span::styled(" ▸ RUNNING TESTS ▸ ", Style::default().fg(gold).add_modifier(Modifier::BOLD)));
+
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        // Layout: status texts (multiple lines) + gauge
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints([Constraint::Min(4), Constraint::Length(3)])
+            .split(inner);
+
+        // Game-style loading text that cycles
+        let loading_texts = vec![
+            "Connecting to the Piston API...",
+            "Invoking ancient runtime spirits...",
+            "Executing test trials...",
+            "Measuring your solution...",
+            "The tower evaluates your code...",
+        ];
+
+        // Cycle through texts based on output length
+        let text_index = (self.execution_output.len() / 2).min(loading_texts.len() - 1);
+        
+        let status_lines = vec![
+            Line::from(Span::styled("", Style::default())),
             Line::from(vec![
-                Span::styled(prefix, Style::default().fg(prefix_color)),
-                Span::styled(
-                    &line.text,
-                    if line.is_error {
-                        Style::default().fg(Color::Rgb(255, 100, 100))
-                    } else {
-                        Style::default().fg(Color::Rgb(180, 180, 180))
-                    }
-                ),
-            ])
-        }).collect();
+                Span::styled("◇ ", Style::default().fg(purple)),
+                Span::styled(loading_texts[text_index], Style::default().fg(Color::Rgb(180, 180, 180))),
+                Span::styled(" ◇", Style::default().fg(purple)),
+            ]),
+            Line::from(Span::styled("", Style::default())),
+        ];
+        
+        let status = Paragraph::new(status_lines)
+            .alignment(Alignment::Center);
+        frame.render_widget(status, chunks[0]);
 
-        let paragraph = Paragraph::new(lines)
-            .wrap(Wrap { trim: false })
-            .scroll((self.scroll_offset as u16, 0));
-
-        frame.render_widget(paragraph, chunks[1]);
+        // Show actual execution progress (capped at 95% until results arrive)
+        let progress_percent = (self.execution_progress * 100.0) as u16;
+        
+        // Simple text display for debugging
+        let text = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                format!("TESTING: {}%", progress_percent),
+                Style::default().fg(gold).add_modifier(Modifier::BOLD)
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                format!("Progress: {}", "=".repeat((progress_percent as usize).min(40))),
+                Style::default().fg(purple)
+            )),
+        ];
+        
+        let widget = Paragraph::new(text).alignment(Alignment::Center);
+        frame.render_widget(widget, chunks[1]);
     }
 
 
@@ -2460,8 +2609,6 @@ impl App {
 
         // Scoreboard area
         let mut scoreboard_text = vec![
-            Line::from(""),
-            Line::from(Span::styled("◇ Test Results ◇", Style::default().fg(gold).add_modifier(Modifier::BOLD))),
             Line::from(""),
         ];
 
