@@ -15,7 +15,7 @@ use crate::problem::{run_tests_on_piston, Problem, TestResults};
 use crate::syntax::SyntaxHighlighter;
 
 // Configuration constants
-const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 30;
+const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 15;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppState {
