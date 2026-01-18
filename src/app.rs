@@ -8,11 +8,12 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
+use tui_textarea::{CursorMove, TextArea};
 
 use crate::languages::{build_translation_prompt_with_signature, Language};
 use crate::llm;
 use crate::problem::{run_tests_on_piston, Problem, TestResults};
-use crate::syntax::SyntaxHighlighter;
+use crate::syntax::SyntectHighlighter;
 
 // Configuration constants
 const LANGUAGE_CHANGE_INTERVAL_SECS: u64 = 15;
@@ -543,8 +544,7 @@ fn get_starter_code(problem: &Problem, language: Language) -> String {
 
 pub struct App {
     pub problem: Problem,
-    pub code: String,
-    pub cursor_position: usize,
+    pub editor: TextArea<'static>,
     pub current_language: Language,
     pub state: AppState,
     pub last_randomize: Instant,
@@ -566,17 +566,62 @@ pub struct App {
     pub translation_rx: Option<mpsc::Receiver<TranslationEvent>>,
     pub pending_translation: Option<TranslationEvent>,
     pub code_sent_for_translation: Option<String>,
+    pub editor_scroll: usize,
 }
 
 impl App {
+    fn build_editor_with_text(text: &str) -> TextArea<'static> {
+        let mut lines: Vec<String> = text
+            .split('\n')
+            .map(|line| line.strip_suffix('\r').unwrap_or(line).to_string())
+            .collect();
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        let mut editor = TextArea::new(lines);
+        editor.set_tab_length(4);
+        editor
+    }
+
+    fn code_text(&self) -> String {
+        self.editor.lines().join("\n")
+    }
+
+    fn line_number_width(&self) -> usize {
+        let digits = self.editor.lines().len().to_string().len();
+        digits.max(2)
+    }
+
+    fn set_editor_content(&mut self, text: &str) {
+        self.set_editor_content_with_cursor(text, None);
+    }
+
+    fn set_editor_content_with_cursor(&mut self, text: &str, cursor: Option<(usize, usize)>) {
+        self.editor = Self::build_editor_with_text(text);
+        if let Some((row, col)) = cursor {
+            let max_row = self.editor.lines().len().saturating_sub(1);
+            let target_row = row.min(max_row);
+            let line_len = self
+                .editor
+                .lines()
+                .get(target_row)
+                .map(|line| line.chars().count())
+                .unwrap_or(0);
+            let target_col = col.min(line_len);
+            self.editor
+                .move_cursor(CursorMove::Jump(target_row as u16, target_col as u16));
+        }
+        self.editor_scroll = 0;
+    }
+
     pub fn new() -> Self {
         let current_language = Language::Python;
         let problem = Problem::random();
+        let starter = get_starter_code(&problem, current_language);
         
         Self {
             problem: problem.clone(),
-            code: get_starter_code(&problem, current_language),
-            cursor_position: 0,
+            editor: Self::build_editor_with_text(&starter),
             current_language,
             state: AppState::Coding,
             last_randomize: Instant::now(),
@@ -596,6 +641,7 @@ impl App {
             translation_rx: None,
             pending_translation: None,
             code_sent_for_translation: None,
+            editor_scroll: 0,
         }
     }
 
@@ -784,7 +830,8 @@ impl App {
     }
 
     fn start_llm_translation(&mut self) {
-        self.pending_translation = None;
+        // Don't clear pending_translation here - only replace when new result arrives
+        // This prevents losing a completed translation if we restart
         self.translation_rx = None;
 
         let target_language = match self.pending_language {
@@ -792,7 +839,7 @@ impl App {
             None => return,
         };
 
-        let code = self.code.clone();
+        let code = self.code_text();
         self.code_sent_for_translation = Some(code.clone());
         let from = self.current_language;
         let to = target_language;
@@ -821,18 +868,14 @@ impl App {
         self.state = AppState::Countdown(5);
         // Pre-select new language now so we can show it during reveal
         self.pending_language = Some(self.current_language.random_except());
-        // Start translation early for faster response
-        self.start_llm_translation();
+        // Translation will start when countdown finishes (in start_transition)
     }
 
     fn start_transition(&mut self) {
         self.transition_start = Some(Instant::now());
         self.state = AppState::Transitioning(0.0);
-        // If user typed during countdown, restart translation with latest code
-        let code_changed = self.code_sent_for_translation.as_ref() != Some(&self.code);
-        if code_changed {
-            self.start_llm_translation();
-        }
+        // Start translation now that countdown has finished
+        self.start_llm_translation();
     }
 
     fn start_reveal(&mut self) {
@@ -842,11 +885,12 @@ impl App {
 
     fn complete_transition(&mut self) {
         // Apply the pending language only (keep the same problem)
+        let cursor = self.editor.cursor();
         if let Some(new_lang) = self.pending_language.take() {
             if let Some(result) = self.pending_translation.take() {
                 match result {
                     TranslationEvent::Success(translated) => {
-                        self.code = translated;
+                        self.set_editor_content_with_cursor(&translated, Some(cursor));
                     }
                     TranslationEvent::Failure(_) => {
                         // Keep the existing code if translation fails
@@ -879,12 +923,11 @@ impl App {
     fn randomize_problem(&mut self) {
         let new_problem = self.problem.random_except();
         self.problem = new_problem.clone();
-        self.code = get_starter_code(&new_problem, self.current_language);
-        self.cursor_position = 0;
+        let starter = get_starter_code(&new_problem, self.current_language);
+        self.set_editor_content(&starter);
     }
 
     fn handle_coding_key(&mut self, key: KeyEvent) {
-        
         // Smart detection: Try Cmd (SUPER) first, then Ctrl
         // Some terminals (with config) can pass through Cmd keys
         // Most terminals pass through Ctrl/Alt keys
@@ -892,10 +935,10 @@ impl App {
         let is_ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let is_alt = key.modifiers.contains(KeyModifiers::ALT);
         let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
-        
+
         // Use Cmd OR Ctrl (whichever is available) for line/editing commands
         let has_modifier = is_cmd || is_ctrl;
-        
+
         if has_modifier && !is_alt {
             match key.code {
                 // Cmd/Ctrl+S to submit
@@ -912,10 +955,37 @@ impl App {
                     self.randomize_problem();
                     return;
                 }
-                // Cmd/Ctrl+C to run (show output)
+                // Cmd/Ctrl+C to run (show output) if no selection, otherwise copy
                 KeyCode::Char('c') | KeyCode::Char('C') => {
-                    self.show_output_panel = true;
-                    self.run_code();
+                    if self.editor.is_selecting() {
+                        self.editor.copy();
+                    } else {
+                        self.show_output_panel = true;
+                        self.run_code();
+                    }
+                    return;
+                }
+                // Cmd/Ctrl+X to cut selection
+                KeyCode::Char('x') | KeyCode::Char('X') => {
+                    if self.editor.is_selecting() {
+                        self.editor.cut();
+                    }
+                    return;
+                }
+                // Cmd/Ctrl+V to paste
+                KeyCode::Char('v') | KeyCode::Char('V') => {
+                    self.editor.paste();
+                    return;
+                }
+                // Cmd/Ctrl+Z to undo
+                KeyCode::Char('z') | KeyCode::Char('Z') => {
+                    self.editor.undo();
+                    return;
+                }
+                // Cmd/Ctrl+Y to redo
+                KeyCode::Char('y') | KeyCode::Char('Y') => {
+                    self.editor.redo();
+                    return;
                 }
                 // Cmd/Ctrl+A: move to start of line (like bash/zsh)
                 KeyCode::Char('a') | KeyCode::Char('A') => {
@@ -939,14 +1009,12 @@ impl App {
                 }
                 // Cmd/Ctrl+W: delete previous word (like bash/zsh)
                 KeyCode::Char('w') | KeyCode::Char('W') => {
-                    self.delete_word_backward();
+                    self.editor.delete_word();
                     return;
                 }
                 // Cmd/Ctrl+D: delete character under cursor
                 KeyCode::Char('d') | KeyCode::Char('D') => {
-                    if self.cursor_position < self.code.len() {
-                        self.code.remove(self.cursor_position);
-                    }
+                    self.editor.delete_next_char();
                     return;
                 }
                 // Cmd/Ctrl+Left: move to start of line (macOS style)
@@ -961,88 +1029,39 @@ impl App {
                 }
                 // Cmd+Up: move to start of document (macOS style)
                 KeyCode::Up if is_cmd => {
-                    self.cursor_position = 0;
+                    self.editor.move_cursor(CursorMove::Top);
                     return;
                 }
                 // Cmd+Down: move to end of document (macOS style)
                 KeyCode::Down if is_cmd => {
-                    self.cursor_position = self.code.len();
+                    self.editor.move_cursor(CursorMove::Bottom);
                     return;
                 }
                 _ => {}
             }
         }
-        
-        // Word navigation with Alt (Option) key
-        if is_alt && !has_modifier {
-            match key.code {
-                // Alt+F or Alt+Right: move forward by word
-                KeyCode::Char('f') | KeyCode::Char('F') | KeyCode::Right => {
-                    self.move_word_right();
-                    return;
-                }
-                // Alt+B or Alt+Left: move backward by word
-                KeyCode::Char('b') | KeyCode::Char('B') | KeyCode::Left => {
-                    self.move_word_left();
-                    return;
-                }
-                // Alt+D: delete next word
-                KeyCode::Char('d') | KeyCode::Char('D') => {
-                    self.delete_word_forward();
-                    return;
-                }
-                // Alt+Backspace: delete previous word
-                KeyCode::Backspace => {
-                    self.delete_word_backward();
-                    return;
-                }
-                _ => {}
-            }
+
+        if key.code == KeyCode::BackTab {
+            self.unindent_current_line();
+            return;
         }
-        
+
         // Tab for indent/unindent
         if key.code == KeyCode::Tab && !has_modifier && !is_alt {
             if is_shift {
-                self.unindent_line();
+                self.unindent_current_line();
             } else {
-                // Insert 4 spaces instead of tab character for consistent rendering
-                self.code.insert_str(self.cursor_position, "    ");
-                self.cursor_position += 4;
+                self.editor.insert_tab();
             }
             return;
         }
-        
-        // Regular key handling (no modifiers or only shift)
-        if !has_modifier && !is_alt {
-            match key.code {
-                KeyCode::Char(c) => {
-                    self.insert_char(c);
-                }
-                KeyCode::Enter => {
-                    self.insert_newline_with_indent();
-                }
-                KeyCode::Backspace => {
-                    self.delete_char();
-                }
-                KeyCode::Left => {
-                    if self.cursor_position > 0 {
-                        self.cursor_position -= 1;
-                    }
-                }
-                KeyCode::Right => {
-                    if self.cursor_position < self.code.len() {
-                        self.cursor_position += 1;
-                    }
-                }
-                KeyCode::Up => {
-                    self.move_cursor_up();
-                }
-                KeyCode::Down => {
-                    self.move_cursor_down();
-                }
-                _ => {}
-            }
+
+        if key.code == KeyCode::Enter && !has_modifier && !is_alt {
+            self.insert_newline_with_indent();
+            return;
         }
+
+        self.editor.input(key);
     }
 
     fn handle_results_key(&mut self, key: KeyEvent) {
@@ -1075,165 +1094,48 @@ impl App {
                 // Check if click is in editor area
                 let click_x = mouse.column;
                 let click_y = mouse.row;
+                let gutter_width = self.line_number_width() + 1;
                 
                 // Account for border (1 char) and line numbers (4 chars: " 99 ")
-                if click_x >= self.editor_area.x + 1 + 4 
+                if click_x >= self.editor_area.x + 1 + gutter_width as u16
                     && click_x < self.editor_area.x + self.editor_area.width - 1
                     && click_y >= self.editor_area.y + 1
                     && click_y < self.editor_area.y + self.editor_area.height - 1 {
                     
-                    let line_num = (click_y - self.editor_area.y - 1) as usize;
-                    let col_in_line = (click_x - self.editor_area.x - 1 - 4) as usize;
+                    let line_num = (click_y - self.editor_area.y - 1) as usize + self.editor_scroll;
+                    let col_in_line = (click_x - self.editor_area.x - 1 - gutter_width as u16) as usize;
                     
                     // Calculate position in code string
-                    let lines: Vec<&str> = self.code.split('\n').collect();
+                    let lines = self.editor.lines();
                     if line_num < lines.len() {
-                        let mut pos = 0;
-                        for (i, line) in lines.iter().enumerate() {
-                            if i < line_num {
-                                pos += line.len() + 1; // +1 for newline
-                            } else {
-                                pos += col_in_line.min(line.len());
-                                break;
-                            }
-                        }
-                        self.cursor_position = pos.min(self.code.len());
+                        let max_col = lines[line_num].chars().count();
+                        let col = col_in_line.min(max_col);
+                        self.editor
+                            .move_cursor(CursorMove::Jump(line_num as u16, col as u16));
                     }
                 }
             }
             MouseEventKind::ScrollUp => {
                 // Scroll up (move cursor up)
-                self.move_cursor_up();
+                self.editor.move_cursor(CursorMove::Up);
             }
             MouseEventKind::ScrollDown => {
                 // Scroll down (move cursor down)
-                self.move_cursor_down();
+                self.editor.move_cursor(CursorMove::Down);
             }
             _ => {}
         }
     }
 
-    fn insert_char(&mut self, c: char) {
-        self.code.insert(self.cursor_position, c);
-        self.cursor_position += c.len_utf8();
-    }
-
     fn insert_newline_with_indent(&mut self) {
-        // Find the current line
-        let lines: Vec<&str> = self.code.split('\n').collect();
-        let mut current_pos = 0;
-        let mut current_line = "";
-        
-        for line in lines.iter() {
-            if current_pos + line.len() >= self.cursor_position {
-                current_line = line;
-                break;
-            }
-            current_pos += line.len() + 1; // +1 for newline
-        }
-        
-        // Count leading spaces
+        let (row, _) = self.editor.cursor();
+        let lines = self.editor.lines();
+        let current_line = lines.get(row).map(|line| line.as_str()).unwrap_or("");
+
         let indent = current_line.chars().take_while(|&c| c == ' ').count();
-        
-        // Insert newline + same indentation
-        self.code.insert(self.cursor_position, '\n');
-        self.cursor_position += 1;
-        
+        self.editor.insert_newline();
         if indent > 0 {
-            let indent_str = " ".repeat(indent);
-            self.code.insert_str(self.cursor_position, &indent_str);
-            self.cursor_position += indent;
-        }
-    }
-
-    fn delete_char(&mut self) {
-        if self.cursor_position > 0 {
-            // Check if we're in leading whitespace and can delete a full indent
-            let before_cursor = &self.code[..self.cursor_position];
-            
-            // Find the start of the current line
-            let line_start = before_cursor.rfind('\n').map(|i| i + 1).unwrap_or(0);
-            let line_before_cursor = &self.code[line_start..self.cursor_position];
-            
-            // If we're in leading spaces and have at least 4 spaces, delete 4
-            if line_before_cursor.chars().all(|c| c == ' ') && line_before_cursor.len() >= 4 {
-                // Delete 4 spaces at once
-                for _ in 0..4 {
-                    if self.cursor_position > line_start {
-                        self.code.remove(self.cursor_position - 1);
-                        self.cursor_position -= 1;
-                    }
-                }
-            } else {
-                // Normal backspace - delete one character
-                let prev_char_boundary = self.code[..self.cursor_position]
-                    .char_indices()
-                    .last()
-                    .map(|(i, _)| i)
-                    .unwrap_or(0);
-                self.code.remove(prev_char_boundary);
-                self.cursor_position = prev_char_boundary;
-            }
-        }
-    }
-
-    fn move_cursor_up(&mut self) {
-        let lines: Vec<&str> = self.code.split('\n').collect();
-        let mut current_pos = 0;
-        let mut current_line = 0;
-        let mut col_in_line = 0;
-
-        for (i, line) in lines.iter().enumerate() {
-            if current_pos + line.len() >= self.cursor_position {
-                current_line = i;
-                col_in_line = self.cursor_position - current_pos;
-                break;
-            }
-            current_pos += line.len() + 1; // +1 for newline
-        }
-
-        if current_line > 0 {
-            let prev_line = lines[current_line - 1];
-            let new_col = col_in_line.min(prev_line.len());
-            let mut new_pos = 0;
-            for (i, _) in lines.iter().enumerate() {
-                if i == current_line - 1 {
-                    new_pos += new_col;
-                    break;
-                }
-                new_pos += lines[i].len() + 1;
-            }
-            self.cursor_position = new_pos;
-        }
-    }
-
-    fn move_cursor_down(&mut self) {
-        let lines: Vec<&str> = self.code.split('\n').collect();
-        let mut current_pos = 0;
-        let mut current_line = 0;
-        let mut col_in_line = 0;
-
-        for (i, line) in lines.iter().enumerate() {
-            if current_pos + line.len() >= self.cursor_position {
-                current_line = i;
-                col_in_line = self.cursor_position - current_pos;
-                break;
-            }
-            current_pos += line.len() + 1;
-        }
-
-        if current_line < lines.len() - 1 {
-            let next_line = lines[current_line + 1];
-            let new_col = col_in_line.min(next_line.len());
-            let mut new_pos = 0;
-            for (i, _) in lines.iter().enumerate() {
-                if i == current_line + 1 {
-                    new_pos += new_col;
-                    break;
-                }
-                new_pos += lines[i].len() + 1;
-            }
-            self.cursor_position = new_pos;
+            self.editor.insert_str(" ".repeat(indent));
         }
     }
 
@@ -1253,7 +1155,7 @@ impl App {
         self.output_rx = Some(rx);
         
         // Clone data for async task
-        let code = self.code.clone();
+        let code = self.code_text();
         let problem = self.problem.clone();
         let language = self.current_language;
         
@@ -1276,174 +1178,61 @@ impl App {
     }
 
     fn move_to_line_start(&mut self) {
-        let lines: Vec<&str> = self.code.split('\n').collect();
-        let mut current_pos = 0;
-        
-        for line in lines.iter() {
-            if current_pos + line.len() >= self.cursor_position {
-                self.cursor_position = current_pos;
-                return;
-            }
-            current_pos += line.len() + 1;
-        }
+        let (row, _) = self.editor.cursor();
+        self.editor.move_cursor(CursorMove::Jump(row as u16, 0));
     }
 
     fn move_to_line_end(&mut self) {
-        let lines: Vec<&str> = self.code.split('\n').collect();
-        let mut current_pos = 0;
-        
-        for line in lines.iter() {
-            if current_pos + line.len() >= self.cursor_position {
-                self.cursor_position = current_pos + line.len();
-                return;
-            }
-            current_pos += line.len() + 1;
-        }
-    }
-
-    fn clear_to_end_of_line(&mut self) {
-        let lines: Vec<&str> = self.code.split('\n').collect();
-        let mut current_pos = 0;
-        let mut current_line = 0;
-        
-        for (i, line) in lines.iter().enumerate() {
-            if current_pos + line.len() >= self.cursor_position {
-                current_line = i;
-                break;
-            }
-            current_pos += line.len() + 1;
-        }
-        
-        // Delete from cursor to end of current line
-        let line_end = current_pos + lines[current_line].len();
-        if self.cursor_position < line_end {
-            self.code.drain(self.cursor_position..line_end);
-        }
+        let (row, _) = self.editor.cursor();
+        let line_len = self
+            .editor
+            .lines()
+            .get(row)
+            .map(|line| line.chars().count())
+            .unwrap_or(0);
+        self.editor
+            .move_cursor(CursorMove::Jump(row as u16, line_len as u16));
     }
 
     fn delete_to_end_of_line(&mut self) {
-        self.clear_to_end_of_line();
+        self.editor.delete_line_by_end();
     }
 
     fn delete_to_start_of_line(&mut self) {
-        let lines: Vec<&str> = self.code.split('\n').collect();
-        let mut current_pos = 0;
-        
-        for line in lines.iter() {
-            if current_pos + line.len() >= self.cursor_position {
-                // Delete from start of line to cursor
-                if self.cursor_position > current_pos {
-                    self.code.drain(current_pos..self.cursor_position);
-                    self.cursor_position = current_pos;
-                }
-                return;
+        self.editor.delete_line_by_head();
+    }
+
+    fn unindent_current_line(&mut self) {
+        let (row, col) = self.editor.cursor();
+        let line = match self.editor.lines().get(row) {
+            Some(line) => line,
+            None => return,
+        };
+
+        let mut remove = 0usize;
+        for ch in line.chars().take(4) {
+            if ch == ' ' {
+                remove += 1;
+            } else if ch == '\t' {
+                remove = 1;
+                break;
+            } else {
+                break;
             }
-            current_pos += line.len() + 1;
         }
-    }
 
-    fn unindent_line(&mut self) {
-        let lines: Vec<&str> = self.code.split('\n').collect();
-        let mut current_pos = 0;
-        
-        for line in lines.iter() {
-            if current_pos + line.len() >= self.cursor_position {
-                // Remove up to 4 spaces or 1 tab from start of line
-                if line.starts_with("    ") {
-                    self.code.drain(current_pos..current_pos + 4);
-                    if self.cursor_position > current_pos {
-                        self.cursor_position = (self.cursor_position - 4).max(current_pos);
-                    }
-                } else if line.starts_with('\t') {
-                    self.code.remove(current_pos);
-                    if self.cursor_position > current_pos {
-                        self.cursor_position = (self.cursor_position - 1).max(current_pos);
-                    }
-                }
-                return;
-            }
-            current_pos += line.len() + 1;
-        }
-    }
-
-    fn move_word_left(&mut self) {
-        if self.cursor_position == 0 {
+        if remove == 0 {
             return;
         }
-        
-        let chars: Vec<char> = self.code.chars().collect();
-        let mut pos = self.cursor_position.saturating_sub(1);
-        
-        // Skip whitespace
-        while pos > 0 && chars.get(pos).map_or(false, |c| c.is_whitespace()) {
-            pos -= 1;
-        }
-        
-        // Skip word characters
-        while pos > 0 && chars.get(pos).map_or(false, |c| !c.is_whitespace()) {
-            pos -= 1;
-        }
-        
-        // Move one position forward if we're not at the start
-        if pos > 0 || chars.get(0).map_or(false, |c| c.is_whitespace()) {
-            pos += 1;
-        }
-        
-        self.cursor_position = pos;
-    }
 
-    fn move_word_right(&mut self) {
-        let chars: Vec<char> = self.code.chars().collect();
-        if self.cursor_position >= chars.len() {
-            return;
+        self.editor.cancel_selection();
+        self.editor.move_cursor(CursorMove::Jump(row as u16, 0));
+        for _ in 0..remove {
+            self.editor.delete_next_char();
         }
-        
-        let mut pos = self.cursor_position;
-        
-        // Skip current word
-        while pos < chars.len() && !chars[pos].is_whitespace() {
-            pos += 1;
-        }
-        
-        // Skip whitespace
-        while pos < chars.len() && chars[pos].is_whitespace() {
-            pos += 1;
-        }
-        
-        self.cursor_position = pos;
-    }
-
-    fn delete_word_backward(&mut self) {
-        if self.cursor_position == 0 {
-            return;
-        }
-        
-        let start_pos = self.cursor_position;
-        self.move_word_left();
-        let end_pos = self.cursor_position;
-        
-        if end_pos < start_pos {
-            self.code.drain(end_pos..start_pos);
-        }
-    }
-
-    fn delete_word_forward(&mut self) {
-        let chars: Vec<char> = self.code.chars().collect();
-        if self.cursor_position >= chars.len() {
-            return;
-        }
-        
-        let start_pos = self.cursor_position;
-        let mut end_pos = start_pos;
-        
-        // Skip current word
-        while end_pos < chars.len() && !chars[end_pos].is_whitespace() {
-            end_pos += 1;
-        }
-        
-        if end_pos > start_pos {
-            self.code.drain(start_pos..end_pos);
-        }
+        let new_col = col.saturating_sub(remove);
+        self.editor
+            .move_cursor(CursorMove::Jump(row as u16, new_col as u16));
     }
 
     fn submit(&mut self) {
@@ -1662,7 +1451,7 @@ impl App {
             .split(content_area);
 
         // Store editor area for mouse clicks
-        self.editor_area = content_area;
+        self.editor_area = content_chunks[1];
 
         // Render problem description
         self.render_problem(frame, content_chunks[0]);
@@ -1747,85 +1536,101 @@ impl App {
         frame.render_widget(paragraph, area);
     }
 
-    fn render_editor(&self, frame: &mut Frame, area: Rect) {
-        // Calculate cursor line and column
-        let mut cursor_line = 0;
-        let mut cursor_col = 0;
-        let mut char_count = 0;
-        
-        for (line_idx, line) in self.code.split('\n').enumerate() {
-            let line_len = line.len() + 1; // +1 for newline
-            if char_count + line_len > self.cursor_position {
-                cursor_line = line_idx;
-                cursor_col = self.cursor_position - char_count;
-                break;
+    fn render_editor(&mut self, frame: &mut Frame, area: Rect) {
+        let lines = self.editor.lines();
+        let total_lines = lines.len().max(1);
+        let line_number_width = self.line_number_width();
+        let visible_height = area.height.saturating_sub(2) as usize;
+        let (cursor_row, cursor_col) = self.editor.cursor();
+
+        if visible_height > 0 {
+            if cursor_row < self.editor_scroll {
+                self.editor_scroll = cursor_row;
+            } else if cursor_row >= self.editor_scroll + visible_height {
+                self.editor_scroll = cursor_row.saturating_sub(visible_height.saturating_sub(1));
             }
-            char_count += line_len;
+            let max_scroll = total_lines.saturating_sub(visible_height);
+            if self.editor_scroll > max_scroll {
+                self.editor_scroll = max_scroll;
+            }
+        } else {
+            self.editor_scroll = 0;
         }
-        
-        // Render lines with syntax highlighting and cursor
-        let lines: Vec<Line> = self.code.split('\n').enumerate().map(|(i, line)| {
-            let line_num = format!("{:>3} ", i + 1);
-            let mut spans = vec![
-                Span::styled(line_num, Style::default().fg(Color::DarkGray)),
-            ];
-            
-            // Apply syntax highlighting
-            let highlighted = SyntaxHighlighter::highlight_line(line, &self.current_language);
-            
-            // Insert cursor if this is the cursor line
-            if i == cursor_line {
-                let mut char_pos = 0;
+
+        let start = self.editor_scroll;
+        let end = (start + visible_height).min(total_lines);
+
+        let mut rendered_lines: Vec<Line> = Vec::new();
+        for (idx, line) in lines.iter().enumerate().skip(start).take(end - start) {
+            let line_num = format!("{:>width$} ", idx + 1, width = line_number_width);
+            let mut spans = vec![Span::styled(line_num, Style::default().fg(Color::DarkGray))];
+
+            let mut highlighted = SyntectHighlighter::highlight(line, &self.current_language);
+            if highlighted.is_empty() {
+                highlighted.push(Span::raw(String::new()));
+            }
+
+            if idx == cursor_row {
+                let mut char_pos = 0usize;
                 let mut inserted = false;
-                let mut final_spans = Vec::new();
-                
+                let mut final_spans: Vec<Span<'static>> = Vec::new();
+                let line_char_len = line.chars().count();
+                let cursor_col = cursor_col.min(line_char_len);
+
                 for span in highlighted {
-                    let span_text = span.content.to_string();
-                    let span_len = span_text.len();
-                    
-                    if !inserted && char_pos + span_len > cursor_col {
-                        // Split this span to insert cursor
-                        let before_cursor = &span_text[..cursor_col.saturating_sub(char_pos)];
-                        let at_cursor_char = span_text.chars().nth(cursor_col - char_pos).unwrap_or(' ');
-                        let after_cursor = &span_text[(cursor_col - char_pos + at_cursor_char.len_utf8()).min(span_len)..];
-                        
-                        if !before_cursor.is_empty() {
-                            final_spans.push(Span::styled(before_cursor.to_string(), span.style));
+                    let span_text = span.content.as_ref();
+                    let span_char_len = span_text.chars().count();
+
+                    if !inserted && char_pos + span_char_len > cursor_col {
+                        let offset = cursor_col.saturating_sub(char_pos);
+                        let mut iter = span_text.char_indices();
+                        if let Some((byte_idx, ch)) = iter.nth(offset) {
+                            let after_start = byte_idx + ch.len_utf8();
+                            let before = &span_text[..byte_idx];
+                            let after = &span_text[after_start..];
+
+                            if !before.is_empty() {
+                                final_spans.push(Span::styled(before.to_string(), span.style));
+                            }
+                            final_spans.push(Span::styled(
+                                ch.to_string(),
+                                Style::default()
+                                    .fg(Color::Black)
+                                    .bg(Color::White)
+                                    .add_modifier(Modifier::BOLD),
+                            ));
+                            if !after.is_empty() {
+                                final_spans.push(Span::styled(after.to_string(), span.style));
+                            }
+                        } else {
+                            final_spans.push(Span::styled(
+                                " ",
+                                Style::default().fg(Color::Black).bg(Color::White),
+                            ));
                         }
-                        
-                        // Cursor with inverted colors - show the actual character under cursor
-                        final_spans.push(Span::styled(
-                            at_cursor_char.to_string(),
-                            Style::default().fg(Color::Black).bg(Color::White).add_modifier(Modifier::BOLD),
-                        ));
-                        
-                        if !after_cursor.is_empty() {
-                            final_spans.push(Span::styled(after_cursor.to_string(), span.style));
-                        }
-                        
+
                         inserted = true;
                     } else {
                         final_spans.push(span);
                     }
-                    
-                    char_pos += span_len;
+
+                    char_pos += span_char_len;
                 }
-                
-                // If cursor is at the end of the line, add a space with inverted colors (not a block)
+
                 if !inserted {
                     final_spans.push(Span::styled(
                         " ",
                         Style::default().fg(Color::Black).bg(Color::White),
                     ));
                 }
-                
+
                 spans.extend(final_spans);
             } else {
                 spans.extend(highlighted);
             }
-            
-            Line::from(spans)
-        }).collect();
+
+            rendered_lines.push(Line::from(spans));
+        }
 
         let title = format!(" ◇ {} ", self.current_language.display_name());
         let panel_color = Color::Rgb(147, 112, 219); // Medium purple - matches header accent
@@ -1834,7 +1639,7 @@ impl App {
             .border_style(Style::default().fg(panel_color))
             .title(Span::styled(title, Style::default().fg(Color::Rgb(255, 191, 0)).add_modifier(Modifier::BOLD)));
 
-        let paragraph = Paragraph::new(lines)
+        let paragraph = Paragraph::new(rendered_lines)
             .block(block)
             .wrap(Wrap { trim: false });
 

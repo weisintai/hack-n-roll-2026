@@ -84,6 +84,105 @@ FUNCTION SIGNATURE (use these types for the target language):
         ));
     }
 
+    // Add mandatory syntax example for target language
+    let syntax_example = match to {
+        Language::Python => r#"
+
+PYTHON SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+def function_name(param: str) -> str:
+    # comment
+    return param.upper()
+REQUIRED: Use 'def', colons, proper indentation, NO braces, NO semicolons"#,
+        Language::JavaScript => r#"
+
+JAVASCRIPT SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+function functionName(param) {
+    // comment
+    return param.toUpperCase();
+}
+REQUIRED: Use 'function', braces {}, semicolons, camelCase"#,
+        Language::TypeScript => r#"
+
+TYPESCRIPT SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+function functionName(param: string): string {
+    // comment
+    return param.toUpperCase();
+}
+REQUIRED: Use 'function', type annotations with colons, braces {}"#,
+        Language::Rust => r#"
+
+RUST SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+pub fn function_name(param: String) -> String {
+    // comment
+    param.to_uppercase()
+}
+REQUIRED: Use 'fn', braces {}, NO semicolon on return, snake_case"#,
+        Language::Go => r#"
+
+GO SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+func functionName(param string) string {
+    // comment
+    return strings.ToUpper(param)
+}
+REQUIRED: Use 'func', return type AFTER params, braces {}"#,
+        Language::Java => r#"
+
+JAVA SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+public String functionName(String param) {
+    // comment
+    return param.toUpperCase();
+}
+REQUIRED: Use 'public', return type BEFORE name, braces {}, semicolons"#,
+        Language::Swift => r#"
+
+SWIFT SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+func functionName(_ param: String) -> String {
+    // comment
+    return param.uppercased()
+}
+REQUIRED: Use 'func', arrow '->' NOT '→', braces {}"#,
+        Language::Kotlin => r#"
+
+KOTLIN SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+fun functionName(param: String): String {
+    // comment
+    return param.uppercase()
+}
+REQUIRED: Use 'fun', colon before return type, braces {}"#,
+        Language::Haskell => r#"
+
+HASKELL SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+functionName :: String -> String
+functionName param = 
+    -- comment
+    map toUpper param
+REQUIRED: Type signature on separate line, NO braces, NO semicolons"#,
+        Language::Lua => r#"
+
+LUA SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+function functionName(param)
+    -- comment
+    return param:upper()
+end
+REQUIRED: Use 'function', 'end' keyword, NO braces, colon for methods"#,
+        Language::OCaml => r#"
+
+OCAML SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+let function_name param : string =
+  (* comment *)
+  String.uppercase_ascii param
+REQUIRED: Use 'let', NO braces, NO semicolons at end"#,
+        Language::Elixir => r#"
+
+ELIXIR SYNTAX EXAMPLE (YOU MUST USE THIS EXACT FORMAT):
+def function_name(param) do
+  # comment
+  String.reverse(param)
+end
+REQUIRED: Use 'def', 'do/end' NOT braces, Module.function() calls"#,
+    };
+    extra_rules.push_str(syntax_example);
+
     // Add target language specific syntax rules
     match to {
         Language::Elixir => {
@@ -180,31 +279,62 @@ PYTHON->BRACES RULE:
     }
 
     format!(
-        r#"You are a code translator that converts code from one language to another.
+        r#"You are a fast, precise code translator. Think concisely and respond immediately.
+
+TASK: Translate {} to {} code.
+
+SPEED INSTRUCTIONS:
+- Use minimal internal reasoning
+- Focus only on syntax conversion
+- Output immediately without lengthy analysis
 
 CRITICAL RULES:
-1. PRESERVE LOGIC: Keep the same algorithmic logic and structure
-2. USE VALID SYNTAX: You MUST use syntactically correct {} syntax
-3. DO NOT fix bugs - translate bugs as-is (but with valid syntax)
-4. DO NOT complete unfinished code - if incomplete, keep it incomplete
-5. DO NOT add any code not in the original
-6. This is LIVE typing - code may be intentionally incomplete
-7. Preserve incomplete lines as-is (e.g., "let fo" stays "let fo")
+1. SYNTACTICALLY CORRECT: Every line MUST be valid {} syntax - verify syntax before output
+2. PRESERVE LOGIC: Keep identical algorithmic structure and logic
+3. IDIOMATIC CODE: Use proper {} idioms, methods, and standard library
+4. NO IMPROVEMENTS: Don't fix bugs, complete code, or add features
+5. PRESERVE INCOMPLETENESS: If code is unfinished, keep it unfinished
+6. LITERAL TRANSLATION: Same variable names, same structure, same flow
 {}
 
-IMPORTANT: "Literal" means preserve the LOGIC and INTENT, NOT copy syntax from the source language.
-You must translate to IDIOMATIC {} syntax while preserving the original structure and incompleteness.
+FORBIDDEN CHARACTERS AND PATTERNS:
+- NEVER use '→' (mathematical arrow) - use actual language syntax
+- NEVER mix syntax from different languages
+- NEVER use mathematical notation in place of code
+- NEVER invent syntax that doesn't exist in {}
+- If unsure, use the SYNTAX EXAMPLE above as reference
 
-Translate this {} code to {}:
+VALIDATION CHECKLIST BEFORE OUTPUT:
+✓ Function declaration uses correct {} keyword and syntax
+✓ Type annotations match {} conventions
+✓ Control structures (if/for/while) use correct {} syntax
+✓ Method calls use correct {} syntax (dot notation, Module.function, etc.)
+✓ Braces/indentation matches {} requirements
+✓ ALL characters are valid ASCII code (no '→', '←', '∀', etc.)
 
+INPUT ({} code):
 {}
 
-Output ONLY the translated code, no markdown formatting, no explanations, no code fences."#,
+OUTPUT REQUIREMENTS:
+- ONLY the translated {} code
+- NO markdown, NO explanations, NO code fences
+- MUST be syntactically valid {} that can compile/run
+- Must match the SYNTAX EXAMPLE format above
+- Start output immediately"#,
+        from.display_name(),
+        to.display_name(),
+        to.display_name(),
         to.display_name(),
         extra_rules,
         to.display_name(),
-        from.display_name(),
         to.display_name(),
-        code
+        to.display_name(),
+        to.display_name(),
+        to.display_name(),
+        to.display_name(),
+        from.display_name(),
+        code,
+        to.display_name(),
+        to.display_name()
     )
 }

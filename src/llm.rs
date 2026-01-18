@@ -38,6 +38,13 @@ pub async fn translate_code(prompt: &str) -> Result<String> {
     );
 
     let payload = json!({
+        "systemInstruction": {
+            "parts": [
+                {
+                    "text": "You are a fast code translator. Think minimally. Output only code. Use correct syntax."
+                }
+            ]
+        },
         "contents": [
             {
                 "parts": [
@@ -46,8 +53,11 @@ pub async fn translate_code(prompt: &str) -> Result<String> {
             }
         ],
         "generationConfig": {
-            "temperature": 0.1,
+            "temperature": 0.0,
             "maxOutputTokens": 4096,
+            "topP": 0.95,
+            "topK": 40,
+            "responseMimeType": "text/plain",
             "thinkingConfig": {
                 "thinkingLevel": "low"
             }
@@ -89,5 +99,29 @@ pub async fn translate_code(prompt: &str) -> Result<String> {
         anyhow::bail!("Gemini response was empty");
     }
 
-    Ok(text)
+    // Clean up any invalid mathematical notation that might have slipped through
+    let cleaned = text
+        .replace('→', "->")  // Mathematical arrow to ASCII arrow
+        .replace('←', "<-")
+        .replace('⇒', "=>")
+        .replace('∀', "for all")
+        .replace('∃', "exists")
+        .replace('λ', "lambda")
+        // Remove markdown code fences if present
+        .replace("```rust\n", "")
+        .replace("```python\n", "")
+        .replace("```javascript\n", "")
+        .replace("```typescript\n", "")
+        .replace("```go\n", "")
+        .replace("```java\n", "")
+        .replace("```swift\n", "")
+        .replace("```kotlin\n", "")
+        .replace("```haskell\n", "")
+        .replace("```lua\n", "")
+        .replace("```ocaml\n", "")
+        .replace("```elixir\n", "")
+        .replace("```\n", "")
+        .replace("\n```", "");
+
+    Ok(cleaned.trim().to_string())
 }
