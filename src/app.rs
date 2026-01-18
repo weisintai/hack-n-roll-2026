@@ -2314,26 +2314,31 @@ impl App {
     fn render_results(&self, frame: &mut Frame, results: &TestResults) {
         let size = frame.size();
         
+        // Theme colors
+        let gold = Color::Rgb(255, 191, 0);
+        let bronze = Color::Rgb(139, 90, 43);
+        let purple = Color::Rgb(147, 112, 219);
+        
         let score_percent = (results.passed as f32 / results.total as f32 * 100.0) as u8;
         let (score_color, score_msg) = if score_percent == 100 {
-            (Color::Rgb(255, 215, 0), "PERFECT!") // Gold
+            (gold, "◈ FLAWLESS VICTORY ◈") // Gold
         } else if score_percent >= 80 {
-            (Color::Green, "GREAT!")
+            (Color::Rgb(100, 200, 130), "◇ WELL DONE ◇") // Soft green
         } else if score_percent >= 50 {
-            (Color::Yellow, "NICE TRY!")
+            (Color::Rgb(255, 200, 80), "◇ PROGRESS MADE ◇") // Warm yellow
         } else {
-            (Color::Red, "GAME OVER")
+            (Color::Rgb(255, 100, 100), "◇ TOWER ENDURES ◇") // Soft red
         };
 
         // Create centered layout with border colors
         let border_color = if score_percent == 100 {
-            Color::Rgb(255, 215, 0) // Gold
+            gold
         } else if score_percent >= 80 {
-            Color::Green
+            purple
         } else if score_percent >= 50 {
-            Color::Yellow
+            Color::Rgb(180, 140, 80)
         } else {
-            Color::Red
+            bronze
         };
 
         // Main layout: horizontal split for main area and scoreboard
@@ -2370,9 +2375,14 @@ impl App {
             main_text.push(Line::from(""));
         }
 
-        // Status message
-        main_text.push(Line::from(Span::styled(score_msg, Style::default().fg(score_color).add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED))));
+        // Decorative top border with mystical symbols
+        main_text.push(Line::from(Span::styled("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", Style::default().fg(bronze))));
         main_text.push(Line::from(""));
+
+        // Status message with decorative elements
+        main_text.push(Line::from(Span::styled(score_msg, Style::default().fg(score_color).add_modifier(Modifier::BOLD))));
+        main_text.push(Line::from(""));
+        main_text.push(Line::from(Span::styled("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", Style::default().fg(bronze))));
         main_text.push(Line::from(""));
         
         // Percentage in mega size - only show necessary digits
@@ -2422,21 +2432,26 @@ impl App {
         main_text.push(Line::from(""));
         main_text.push(Line::from(""));
         
-        // Summary message
-        let summary = format!("You passed {} out of {} test cases!", results.passed, results.total);
-        main_text.push(Line::from(Span::styled(summary, Style::default().fg(Color::White))));
+        // Summary message with mystical flavor
+        let summary = format!("⧗ Conquered {} of {} trials in the tower ⧗", results.passed, results.total);
+        main_text.push(Line::from(Span::styled(summary, Style::default().fg(Color::Rgb(200, 200, 200)))));
         
         main_text.push(Line::from(""));
+        main_text.push(Line::from(Span::styled("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", Style::default().fg(bronze))));
         main_text.push(Line::from(""));
-        main_text.push(Line::from(""));
-        main_text.push(Line::from(Span::styled("Press 'R' to restart  •  Press 'Q' to quit", Style::default().fg(Color::Rgb(255, 165, 0)))));
+        main_text.push(Line::from(vec![
+            Span::styled("Press ", Style::default().fg(Color::Rgb(140, 140, 140))),
+            Span::styled("R", Style::default().fg(purple).add_modifier(Modifier::BOLD)),
+            Span::styled(" to continue  ┃  Press ", Style::default().fg(Color::Rgb(140, 140, 140))),
+            Span::styled("Q", Style::default().fg(Color::Rgb(180, 80, 80)).add_modifier(Modifier::BOLD)),
+            Span::styled(" to quit", Style::default().fg(Color::Rgb(140, 140, 140))),
+        ]));
 
         let main_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Double)
             .border_style(Style::default().fg(border_color).add_modifier(Modifier::BOLD))
-            .title(" FINAL SCORE ")
-            .title_style(Style::default().fg(border_color).add_modifier(Modifier::BOLD));
+            .title(Span::styled(" ◆ JUDGEMENT ◆ ", Style::default().fg(gold).add_modifier(Modifier::BOLD)));
 
         let main_paragraph = Paragraph::new(main_text)
             .block(main_block)
@@ -2446,16 +2461,22 @@ impl App {
         // Scoreboard area
         let mut scoreboard_text = vec![
             Line::from(""),
+            Line::from(Span::styled("◇ Test Results ◇", Style::default().fg(gold).add_modifier(Modifier::BOLD))),
+            Line::from(""),
         ];
 
         for result in &results.details {
-            let status_symbol = if result.passed { "✓" } else { "✗" };
-            let status_color = if result.passed { Color::Green } else { Color::Red };
+            let status_symbol = if result.passed { "◆" } else { "◇" };
+            let status_color = if result.passed { 
+                Color::Rgb(100, 200, 130) 
+            } else { 
+                Color::Rgb(255, 100, 100)
+            };
             
             scoreboard_text.push(Line::from(vec![
                 Span::styled("  ", Style::default()),
                 Span::styled(status_symbol, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
-                Span::styled(format!(" Test #{}", result.case_number), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(" Trial #{}", result.case_number), Style::default().fg(Color::Rgb(200, 200, 200)).add_modifier(Modifier::BOLD)),
             ]));
             
             // Compact display - use owned String
@@ -2466,23 +2487,23 @@ impl App {
             };
             
             scoreboard_text.push(Line::from(vec![
-                Span::styled("  In: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(input_display, Style::default().fg(Color::Gray)),
+                Span::styled("    Input: ", Style::default().fg(Color::Rgb(140, 140, 140))),
+                Span::styled(input_display, Style::default().fg(Color::Rgb(180, 180, 180))),
             ]));
             
             if result.passed {
                 scoreboard_text.push(Line::from(vec![
-                    Span::styled("  ✓  ", Style::default().fg(Color::Green)),
-                    Span::styled(result.expected.clone(), Style::default().fg(Color::Green)),
+                    Span::styled("    ✓ ", Style::default().fg(Color::Rgb(100, 200, 130))),
+                    Span::styled(result.expected.clone(), Style::default().fg(Color::Rgb(100, 200, 130))),
                 ]));
             } else {
                 scoreboard_text.push(Line::from(vec![
-                    Span::styled("  Expected: ", Style::default().fg(Color::Cyan)),
-                    Span::styled(result.expected.clone(), Style::default().fg(Color::White)),
+                    Span::styled("    Expected: ", Style::default().fg(purple)),
+                    Span::styled(result.expected.clone(), Style::default().fg(Color::Rgb(200, 200, 200))),
                 ]));
                 scoreboard_text.push(Line::from(vec![
-                    Span::styled("  Got: ", Style::default().fg(Color::Red)),
-                    Span::styled(result.actual.clone(), Style::default().fg(Color::White)),
+                    Span::styled("    Got: ", Style::default().fg(Color::Rgb(255, 100, 100))),
+                    Span::styled(result.actual.clone(), Style::default().fg(Color::Rgb(200, 200, 200))),
                 ]));
             }
             scoreboard_text.push(Line::from(""));
@@ -2491,7 +2512,8 @@ impl App {
         let scoreboard_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Double)
-            .border_style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD));
+            .border_style(Style::default().fg(bronze).add_modifier(Modifier::BOLD))
+            .title(Span::styled(" ◇ TRIALS ◇ ", Style::default().fg(gold).add_modifier(Modifier::BOLD)));
 
         let scoreboard_paragraph = Paragraph::new(scoreboard_text)
             .block(scoreboard_block)
