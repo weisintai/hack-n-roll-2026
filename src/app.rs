@@ -1378,40 +1378,104 @@ impl App {
     
     fn render_compiling(&self, frame: &mut Frame, progress: f32) {
         let size = frame.size();
-        let area = centered_rect(60, 20, size);
-        
+        let area = centered_rect(45, 10, size);
+
+        // Theme colors
+        let gold = Color::Rgb(255, 191, 0);
+        let bronze = Color::Rgb(139, 90, 43);
+        let purple = Color::Rgb(147, 112, 219);
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(bronze))
+            .title(Span::styled(" ◈ Compiling ", Style::default().fg(gold).add_modifier(Modifier::BOLD)));
+
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        // Layout: status text + gauge
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints([Constraint::Length(2), Constraint::Length(3)])
+            .split(inner);
+
+        let status = Paragraph::new(Line::from(vec![
+            Span::styled("Building ", Style::default().fg(Color::Rgb(160, 160, 160))),
+            Span::styled(self.current_language.display_name(), Style::default().fg(purple).add_modifier(Modifier::BOLD)),
+        ]))
+        .alignment(Alignment::Center);
+        frame.render_widget(status, chunks[0]);
+
         let gauge = Gauge::default()
-            .block(Block::default().borders(Borders::ALL).title(" Compiling "))
-            .gauge_style(Style::default().fg(Color::Cyan))
-            .percent((progress * 100.0) as u16);
-            
-        frame.render_widget(gauge, area);
+            .gauge_style(Style::default().fg(purple).bg(Color::Rgb(40, 40, 40)))
+            .percent((progress * 100.0) as u16)
+            .label(Span::styled(
+                format!("{}%", (progress * 100.0) as u16),
+                Style::default().fg(gold).add_modifier(Modifier::BOLD)
+            ));
+        frame.render_widget(gauge, chunks[1]);
     }
 
     fn render_running(&self, frame: &mut Frame) {
         let size = frame.size();
-        let area = centered_rect(80, 60, size);
-        
+        let area = centered_rect(70, 50, size);
+
+        // Theme colors
+        let gold = Color::Rgb(255, 191, 0);
+        let bronze = Color::Rgb(139, 90, 43);
+        let purple = Color::Rgb(147, 112, 219);
+        let dim = Color::Rgb(100, 100, 100);
+
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(" Executing on Piston Container ")
-            .border_style(Style::default().fg(Color::Yellow));
-            
+            .border_style(Style::default().fg(bronze))
+            .title(Span::styled(" ▸ Execution ", Style::default().fg(gold).add_modifier(Modifier::BOLD)));
+
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
 
+        // Split into header + log area
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(3), Constraint::Min(0)])
+            .split(inner_area);
+
+        // Header with language info
+        let header = Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled("Language: ", Style::default().fg(dim)),
+                Span::styled(self.current_language.display_name(), Style::default().fg(purple).add_modifier(Modifier::BOLD)),
+                Span::styled("  │  ", Style::default().fg(bronze)),
+                Span::styled("Status: ", Style::default().fg(dim)),
+                Span::styled("Running tests", Style::default().fg(Color::Rgb(100, 200, 130))),
+            ]),
+            Line::from(Span::styled("────────────────────────────────────────────────────────", Style::default().fg(bronze))),
+        ]);
+        frame.render_widget(header, chunks[0]);
+
+        // Log output
         let lines: Vec<Line> = self.execution_output.iter().map(|line| {
-            Line::from(Span::styled(
-                &line.text, 
-                if line.is_error { Style::default().fg(Color::Red) } else { Style::default().fg(Color::White) }
-            ))
+            let prefix = if line.is_error { "✗ " } else { "› " };
+            let prefix_color = if line.is_error { Color::Rgb(255, 100, 100) } else { Color::Rgb(100, 100, 100) };
+            Line::from(vec![
+                Span::styled(prefix, Style::default().fg(prefix_color)),
+                Span::styled(
+                    &line.text,
+                    if line.is_error {
+                        Style::default().fg(Color::Rgb(255, 100, 100))
+                    } else {
+                        Style::default().fg(Color::Rgb(180, 180, 180))
+                    }
+                ),
+            ])
         }).collect();
-        
+
         let paragraph = Paragraph::new(lines)
             .wrap(Wrap { trim: false })
             .scroll((self.scroll_offset as u16, 0));
-            
-        frame.render_widget(paragraph, inner_area);
+
+        frame.render_widget(paragraph, chunks[1]);
     }
 
 
